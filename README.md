@@ -6,6 +6,6 @@ Landon Prince: Play tester, Github Manager, Backend-end Game Logic
 
 Maddox Barron: Play tester, Agile Board Manager, Backend-end Game Logic
 
-Nick Bui: Play tester, Networking Lead
+Nick Bui: Play tester, Networking Lead, Backend-end Game Logic
 
 Matthew McCullough: Play tester, Audio/Visual Designer, Backend-end Game Logic
