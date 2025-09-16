@@ -1,4 +1,4 @@
-# SoleSurvivor
+# Sole Survivor
 
 ## Team Roles
 
