@@ -1,4 +1,5 @@
 # Sole Survivor
+<img width="1024" height="1024" alt="image" src="https://github.com/user-attachments/assets/d03bbac1-182d-4bbc-8e3e-e57baf2da70c" />
 
 ## Team Roles
 
