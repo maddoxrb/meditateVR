@@ -30,3 +30,12 @@
 - **Audio/Visual Designer**  
 - **Backend Game Logic**  
 - **Playtester**
+
+
+
+Project Notes and Findings:
+Colliders: Adding a mesh collider to a prefab won't directly work if the prefab has sub components. Either use a box or add mesh to each sub component
+Building: When building with multiple scenes, go to File->Build Profile->Scenes. Here you can move the scene you want to load into to the top of the list
+Grabbable Items: 
+  1. On Mesh Turn Off isTrigger (prevents falling through floor), Turn on Gravity, Turn of Kinematics, Change Collision Detection From Discrete To Continuous
+  2. To prevent objects from "pushing back" and sending the player flying, we have created 3 layers. A player, scene, and grabbable object collision layer. Under Project Settings -> Physics -> Collision Matrix, uncheck the interaction between grabbables and player
