@@ -1,0 +1,2 @@
+/Users/maddox/Desktop/SoleSurvivor/Library/Bee/Android/Prj/IL2CPP/Gradle/unityLibrary/src/main/cpp/CMakeLists.txt
+/Users/maddox/Desktop/SoleSurvivor/Library/Bee/Android/Prj/IL2CPP/Gradle/unityLibrary/src/main/cpp/GameActivity/CMakeLists.txt
