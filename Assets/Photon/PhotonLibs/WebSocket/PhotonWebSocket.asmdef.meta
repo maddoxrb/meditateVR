@@ -7,8 +7,8 @@ AssemblyDefinitionImporter:
   assetBundleVariant: 
 AssetOrigin:
   serializedVersion: 1
-  productId: 267958
-  packageName: Photon Fusion
-  packageVersion: 2.0.7
+  productId: 130518
+  packageName: Photon Voice 2
+  packageVersion: 2.59
   assetPath: Assets/Photon/PhotonLibs/WebSocket/PhotonWebSocket.asmdef
-  uploadId: 796522
+  uploadId: 756092
