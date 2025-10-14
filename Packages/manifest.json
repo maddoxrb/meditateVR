@@ -6,6 +6,7 @@
     "com.meta.xr.sdk.interaction.ovr": "78.0.0",
     "com.meta.xr.simulator": "76.0.0",
     "com.meta.xr.simulator.synthenvbuilder": "60.0.1",
+    "com.unity.2d.sprite": "1.0.0",
     "com.unity.ai.navigation": "2.0.8",
     "com.unity.burst": "1.8.24",
     "com.unity.cinemachine": "2.10.4",

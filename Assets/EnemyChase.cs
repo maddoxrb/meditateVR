@@ -20,6 +20,10 @@ public class EnemyChase : MonoBehaviour
     public bool requireSpecificKiller = false;
     [Tooltip("GameObject required to trigger a kill when 'requireSpecificKiller' is true.")]
     public GameObject specificKiller;
+    [Tooltip("Maximum distance to search above/below the player for a valid NavMesh point when the player is airborne.")]
+    [SerializeField] private float navSampleDistance = 4f;
+    [Tooltip("Optional layers considered ground when raycasting beneath the player as a fallback.")]
+    [SerializeField] private LayerMask groundLayers = ~0;
 
     private Transform player;
     private NavMeshAgent agent;
@@ -32,6 +36,7 @@ public class EnemyChase : MonoBehaviour
     private Quaternion spawnRotation;
     private Coroutine postKillRoutine;
     private float spawnTime;
+    private Vector3 lastDestination;
 
     void Start()
     {
@@ -53,6 +58,7 @@ public class EnemyChase : MonoBehaviour
         spawnPosition = transform.position;
         spawnRotation = transform.rotation;
         spawnTime = Time.time;
+        lastDestination = spawnPosition;
 
         if (animator == null)
         {
@@ -80,11 +86,26 @@ public class EnemyChase : MonoBehaviour
 
         if (player != null && agent != null)
         {
-            agent.SetDestination(player.position);
+            Vector3 chaseTarget;
+            if (TryGetChasePosition(player.position, out chaseTarget))
+            {
+                lastDestination = chaseTarget;
+                if (agent.isStopped)
+                {
+                    agent.isStopped = false;
+                }
+                agent.SetDestination(chaseTarget);
+            }
+            else if (lastDestination != Vector3.zero && !agent.hasPath)
+            {
+                agent.SetDestination(lastDestination);
+            }
 
             if (animator != null)
             {
-                float distanceToPlayer = Vector3.Distance(transform.position, player.position);
+                Vector3 enemyFlat = new Vector3(transform.position.x, 0f, transform.position.z);
+                Vector3 playerFlat = new Vector3(player.position.x, 0f, player.position.z);
+                float distanceToPlayer = Vector3.Distance(enemyFlat, playerFlat);
                 bool shouldAttack = distanceToPlayer <= attackDistance;
 
                 animator.SetBool(IsChasingHash, !shouldAttack);
@@ -174,6 +195,39 @@ public class EnemyChase : MonoBehaviour
         }
 
         spawnTime = Time.time;
+        lastDestination = spawnPosition;
         postKillRoutine = null;
+    }
+
+    private bool TryGetChasePosition(Vector3 playerPosition, out Vector3 chasePosition)
+    {
+        chasePosition = Vector3.zero;
+
+        NavMeshHit navHit;
+        if (NavMesh.SamplePosition(playerPosition, out navHit, navSampleDistance, NavMesh.AllAreas))
+        {
+            chasePosition = navHit.position;
+            return true;
+        }
+
+        RaycastHit groundHit;
+        Vector3 rayStart = playerPosition + Vector3.up * navSampleDistance;
+        if (Physics.Raycast(rayStart, Vector3.down, out groundHit, navSampleDistance * 2f, groundLayers, QueryTriggerInteraction.Ignore))
+        {
+            if (NavMesh.SamplePosition(groundHit.point, out navHit, navSampleDistance, NavMesh.AllAreas))
+            {
+                chasePosition = navHit.position;
+                return true;
+            }
+        }
+
+        Vector3 horizontalTarget = new Vector3(playerPosition.x, transform.position.y, playerPosition.z);
+        if (NavMesh.SamplePosition(horizontalTarget, out navHit, navSampleDistance, NavMesh.AllAreas))
+        {
+            chasePosition = navHit.position;
+            return true;
+        }
+
+        return false;
     }
 }

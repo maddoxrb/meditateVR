@@ -9,14 +9,14 @@ TagManager:
   - Default
   - TransparentFX
   - Ignore Raycast
-  - 
+  - Overlay UI
   - Water
   - UI
   - Player
   - Grabbable
   - Scene
   - PostProcessing
-  - 
+  - Enemy
   - 
   - 
   - 
