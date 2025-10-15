@@ -29,7 +29,8 @@ public class EnemyChase : MonoBehaviour
     private NavMeshAgent agent;
     [SerializeField] private Animator animator; // assign in inspector if animator is on a child
     private static readonly int IsChasingHash = Animator.StringToHash("isChasing");
-    private static readonly int IsAttackingHash = Animator.StringToHash("isAttacking");
+    private static readonly int IsAttackingHash1 = Animator.StringToHash("isAttacking1");
+    private static readonly int IsAttackingHash2 = Animator.StringToHash("isAttacking2");
     private static readonly int IsKilledHash = Animator.StringToHash("isKilled");
     private bool isKilled;
     private Vector3 spawnPosition;
@@ -37,6 +38,7 @@ public class EnemyChase : MonoBehaviour
     private Coroutine postKillRoutine;
     private float spawnTime;
     private Vector3 lastDestination;
+    private int currentAttackVariant = -1;
 
     void Start()
     {
@@ -59,6 +61,7 @@ public class EnemyChase : MonoBehaviour
         spawnRotation = transform.rotation;
         spawnTime = Time.time;
         lastDestination = spawnPosition;
+        currentAttackVariant = -1;
 
         if (animator == null)
         {
@@ -73,7 +76,8 @@ public class EnemyChase : MonoBehaviour
         {
             animator.SetBool(IsKilledHash, false);
             animator.SetBool(IsChasingHash, false);
-            animator.SetBool(IsAttackingHash, false);
+            animator.SetBool(IsAttackingHash1, false);
+            animator.SetBool(IsAttackingHash2, false);
         }
     }
 
@@ -109,7 +113,21 @@ public class EnemyChase : MonoBehaviour
                 bool shouldAttack = distanceToPlayer <= attackDistance;
 
                 animator.SetBool(IsChasingHash, !shouldAttack);
-                animator.SetBool(IsAttackingHash, shouldAttack);
+                if (shouldAttack)
+                {
+                    if (currentAttackVariant == -1)
+                    {
+                        currentAttackVariant = Random.value > 0.5f ? 1 : 2;
+                        animator.SetBool(IsAttackingHash1, currentAttackVariant == 1);
+                        animator.SetBool(IsAttackingHash2, currentAttackVariant == 2);
+                    }
+                }
+                else
+                {
+                    animator.SetBool(IsAttackingHash1, false);
+                    animator.SetBool(IsAttackingHash2, false);
+                    currentAttackVariant = -1;
+                }
             }
         }
     }
@@ -140,8 +158,10 @@ public class EnemyChase : MonoBehaviour
         {
             isKilled = true;
             animator.SetBool(IsChasingHash, false);
-            animator.SetBool(IsAttackingHash, false);
+            animator.SetBool(IsAttackingHash1, false);
+            animator.SetBool(IsAttackingHash2, false);
             animator.SetBool(IsKilledHash, true);
+            currentAttackVariant = -1;
 
             if (agent != null)
             {
@@ -183,7 +203,8 @@ public class EnemyChase : MonoBehaviour
         {
             animator.SetBool(IsKilledHash, false);
             animator.SetBool(IsChasingHash, false);
-            animator.SetBool(IsAttackingHash, false);
+            animator.SetBool(IsAttackingHash1, false);
+            animator.SetBool(IsAttackingHash2, false);
         }
 
         transform.SetPositionAndRotation(spawnPosition, spawnRotation);
@@ -196,6 +217,7 @@ public class EnemyChase : MonoBehaviour
 
         spawnTime = Time.time;
         lastDestination = spawnPosition;
+        currentAttackVariant = -1;
         postKillRoutine = null;
     }
 
