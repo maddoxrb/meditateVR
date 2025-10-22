@@ -15,10 +15,24 @@ public class DamageVignetteFeedback : MonoBehaviour
     [Tooltip("Maximum alpha the vignette can reach.")]
     [SerializeField] private float maxAlpha = 0.85f;
 
+    [Header("Canvas Switching")]
+    [SerializeField] private Canvas mainCanvas;
+    [SerializeField] private Canvas deathCanvas;
+
     private float currentAlpha;
 
     private void Awake()
     {
+        if (mainCanvas == null)
+        {
+            mainCanvas = GetComponentInParent<Canvas>();
+        }
+
+        if (deathCanvas != null)
+        {
+            deathCanvas.gameObject.SetActive(false);
+        }
+
         if (vignetteImage != null)
         {
             currentAlpha = vignetteImage.color.a;
@@ -70,6 +84,18 @@ public class DamageVignetteFeedback : MonoBehaviour
     {
         currentAlpha = maxAlpha;
         SetImageAlpha(currentAlpha);
+
+        if (deathCanvas != null)
+        {
+            deathCanvas.gameObject.SetActive(true);
+            deathCanvas.enabled = true;
+        }
+
+        if (mainCanvas != null && deathCanvas != mainCanvas)
+        {
+            mainCanvas.enabled = false;
+            mainCanvas.gameObject.SetActive(false);
+        }
     }
 
     private void SetImageAlpha(float alpha)

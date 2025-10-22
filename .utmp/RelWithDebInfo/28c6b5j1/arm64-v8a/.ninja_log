@@ -1,10 +1,10 @@
 # ninja log v5
-3	1119	1760407355347472912	GameActivity/CMakeFiles/game.dir/UGAInputKeyEvent.cpp.o	781c03c7987800b7
-1	1123	1760407355350083628	GameActivity/CMakeFiles/game.dir/UGAEntry.cpp.o	f2bbd87e3d129bca
-1	1130	1760407355359892368	GameActivity/CMakeFiles/game.dir/UGAConfiguration.cpp.o	1917e7f40a2bb1f1
-3	1144	1760407355376363711	GameActivity/CMakeFiles/game.dir/UGAInputMotionEvent.cpp.o	cb87176e1cb1aec
-5	1218	1760407355449794149	GameActivity/CMakeFiles/game.dir/UGASoftKeyboard.cpp.o	3b99053b4d2dc992
-1	1285	1760407355516943484	GameActivity/CMakeFiles/game.dir/UGADebug.cpp.o	cbaeb7d507f42ca8
-2	1289	1760407355518368488	GameActivity/CMakeFiles/game.dir/UGAInput.cpp.o	237102fb9b5bde5
-0	1512	1760407355741391310	GameActivity/CMakeFiles/game.dir/UGAApplication.cpp.o	e02b27fbe5f6c47b
-1512	1658	1760407355889124272	/Users/maddox/Desktop/SoleSurvivor/Library/Bee/Android/Prj/IL2CPP/Gradle/unityLibrary/build/intermediates/cxx/RelWithDebInfo/28c6b5j1/obj/arm64-v8a/libgame.so	232380ba0c58f1f6
+5	1173	1760930245949711643	GameActivity/CMakeFiles/game.dir/UGAInputKeyEvent.cpp.o	781c03c7987800b7
+3	1175	1760930245949715143	GameActivity/CMakeFiles/game.dir/UGAEntry.cpp.o	f2bbd87e3d129bca
+2	1225	1760930246004454531	GameActivity/CMakeFiles/game.dir/UGAConfiguration.cpp.o	1917e7f40a2bb1f1
+5	1213	1760930245989366553	GameActivity/CMakeFiles/game.dir/UGAInputMotionEvent.cpp.o	cb87176e1cb1aec
+4	1439	1760930246218428777	GameActivity/CMakeFiles/game.dir/UGAInput.cpp.o	237102fb9b5bde5
+1528	1769	1760930246547700659	/Users/maddox/Desktop/SoleSurvivor/Library/Bee/Android/Prj/IL2CPP/Gradle/unityLibrary/build/intermediates/cxx/RelWithDebInfo/28c6b5j1/obj/arm64-v8a/libgame.so	232380ba0c58f1f6
+6	1206	1760930245983018736	GameActivity/CMakeFiles/game.dir/UGASoftKeyboard.cpp.o	3b99053b4d2dc992
+3	1249	1760930246028730338	GameActivity/CMakeFiles/game.dir/UGADebug.cpp.o	cbaeb7d507f42ca8
+2	1528	1760930246305299839	GameActivity/CMakeFiles/game.dir/UGAApplication.cpp.o	e02b27fbe5f6c47b

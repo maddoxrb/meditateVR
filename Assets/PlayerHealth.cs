@@ -65,6 +65,7 @@ public class PlayerHealth : MonoBehaviour
             isNearEnemy = true;
             timeNearEnemy = 0f;
             ApplyDamage(1);
+            Debug.Log("Hit!");
             return;
         }
 
