@@ -12739,13 +12739,10 @@
             Host Migration related code in order to get a copy of the Simulation State
             </summary>
             <summary>
-            Host Migration related code in order to get a copy of the Simulation State
-            </summary>
-            <summary>
-            Represents a Server or Client Simulation.
-            </summary>
-            <summary>
-            All Scene related API and fields
+            Represents a Server or Client Simulation. IMPORTANT: You can only use a NetworkRunner once. Once that NetworkRunner 
+            disconnects from a game session or fails to connect it should be destroyed, and a new Network Runner instance should
+            be created to start any new game sessions. For more information see the 
+            <a href="https://doc.photonengine.com/fusion/current/manual/network-runner">Online Manual</a>.
             </summary>
         </member>
         <member name="P:Fusion.NetworkRunner.IsResume">
@@ -13083,6 +13080,18 @@
         <member name="P:Fusion.NetworkRunner.ActivePlayers">
             <summary>
             Returns the collection of <see cref="T:Fusion.PlayerRef"/> objects for this NetworkRunner's <see cref="T:Fusion.Simulation"/>.
+            </summary>
+        </member>
+        <member name="P:Fusion.NetworkRunner.CommittedPlayers">
+            <summary>
+            Returns the collection of <see cref="T:Fusion.PlayerRef"/> objects for this NetworkRunner's <see cref="T:Fusion.Simulation"/>.
+            Unlike <see cref="P:Fusion.NetworkRunner.ActivePlayers"/> it will not contain players that have just left the room and are pending 
+            deletion.
+            </summary>
+        </member>
+        <member name="M:Fusion.NetworkRunner.IsPlayerCommitted(Fusion.PlayerRef)">
+            <summary>
+            Is the Fusion player in the room and not pending deletion?
             </summary>
         </member>
         <member name="P:Fusion.NetworkRunner.ObjectProvider">
@@ -17133,6 +17142,13 @@
             </summary>
         </member>
         <member name="F:Fusion.SimulationConfig.EnableExperimentalPacketLossRecovery">
+            <summary>
+            If set to true, makes sure Fusion packets fit into UDP MTU on retries, thus avoiding fragmentation. This can help in poor network conditions, when
+            larger Fusion packets are rejected due to UDP packets arriving out of order or being lost, at a cost of more packets being sent overall, especially
+            when using large state objects. 
+            </summary>
+        </member>
+        <member name="F:Fusion.SimulationConfig.EnableAdaptivePacketFragmentation">
             <summary>
             If set to true, makes sure Fusion packets fit into UDP MTU on retries, thus avoiding fragmentation. This can help in poor network conditions, when
             larger Fusion packets are rejected due to UDP packets arriving out of order or being lost, at a cost of more packets being sent overall, especially

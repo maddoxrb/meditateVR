@@ -5771,6 +5771,12 @@ namespace Fusion.Editor {
   using UnityEditor.IMGUI.Controls;
   using UnityEngine;
   using Object = UnityEngine.Object;
+  
+#if UNITY_6000_2_OR_NEWER
+  using TreeViewState = UnityEditor.IMGUI.Controls.TreeViewState<int>;
+  using TreeViewItem = UnityEditor.IMGUI.Controls.TreeViewItem<int>;
+  using TreeView = UnityEditor.IMGUI.Controls.TreeView<int>;
+#endif
 
   [Serializable]
   class FusionGridState : TreeViewState {
@@ -13352,15 +13358,18 @@ namespace Fusion.Editor {
           Label("Active Players", playerCount);
 
           if (runner.IsServer && playerCount > 0) {
-            foreach (var item in runner.ActivePlayers) {
+            foreach (var player in runner.ActivePlayers) {
 
               // skip local player
-              if (runner.LocalPlayer == item) { continue; }
+              if (runner.LocalPlayer == player) {
+                continue;
+              }
 
-              Label("Player:PlayerId", item.PlayerId);
-              Label("Player:ConnectionType", runner.GetPlayerConnectionType(item));
-              Label("Player:UserId", runner.GetPlayerUserId(item));
-              Label("Player:RTT", runner.GetPlayerRtt(item));
+              Label("Player:PlayerId", player.PlayerId);
+              Label("Player:ConnectionType", runner.GetPlayerConnectionType(player));
+              Label("Player:UserId", runner.GetPlayerUserId(player));
+              Label("Player:RTT", runner.GetPlayerRtt(player));
+              Label("Player:Committed?", runner.IsPlayerCommitted(player));
             }
           }
 
