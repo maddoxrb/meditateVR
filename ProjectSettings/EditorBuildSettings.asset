@@ -18,6 +18,9 @@ EditorBuildSettings:
     path: Assets/Scenes/New Scene.unity
     guid: 43d89aea6b4fe4cf78acc748edb02888
   - enabled: 1
+    path: Assets/Scenes/StartingScene.unity
+    guid: dd61102a313ac4e688dbcc499a9fec77
+  - enabled: 1
     path: Assets/Scenes/Mars_Main.unity
     guid: 936ed0bd204f74934a733a94b0bbf5cd
   m_configObjects:

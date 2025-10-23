@@ -7,6 +7,9 @@ public class AsteroidImpact : MonoBehaviour
     [SerializeField] private float raycastPadding = 0.5f;
     [SerializeField] private ParticleSystem fallbackImpactEffect;
     [SerializeField] private LayerMask groundLayers = Physics.DefaultRaycastLayers;
+    [Header("Audio")]
+    [SerializeField] private AudioClip impactAudioClip;
+    [SerializeField, Range(0f, 1f)] private float impactAudioVolume = 1f;
 
     private Vector3 travelDirection = Vector3.down;
     private float travelSpeed;
@@ -95,6 +98,8 @@ public class AsteroidImpact : MonoBehaviour
             }
         }
 
+        PlayImpactAudio(point);
+
         active = false;
         enabled = false;
         owner?.NotifyAsteroidAvailable(this);
@@ -111,5 +116,15 @@ public class AsteroidImpact : MonoBehaviour
     public void AssignOwner(AsteroidSpawner spawner)
     {
         owner = spawner;
+    }
+
+    private void PlayImpactAudio(Vector3 point)
+    {
+        if (impactAudioClip == null)
+        {
+            return;
+        }
+
+        AudioSource.PlayClipAtPoint(impactAudioClip, point, Mathf.Clamp01(impactAudioVolume));
     }
 }

@@ -1,76 +1,569 @@
-using UnityEngine;
 using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
 
 public class EnemySpawner : MonoBehaviour
 {
     [Header("Enemy Settings")]
-    public GameObject enemyPrefab;           // Your Martian enemy prefab
-    public int maxEnemies = 10;              // Max enemies allowed at once
+    public GameObject enemyPrefab;
+    public int maxEnemies = 10;
 
     [Header("Spawn Settings")]
-    public Transform[] spawnPoints;          // Assign in Inspector
-    public float spawnIntervalMin = 3f;      // Minimum time between spawns
-    public float spawnIntervalMax = 7f;      // Maximum time between spawns
+    public Transform[] spawnPoints;
+    public float spawnIntervalMin = 3f;
+    public float spawnIntervalMax = 7f;
 
-    private int currentEnemies = 0;          // Track active enemies
-
-    void Start()
+    [System.Serializable]
+    public class LifecycleSettings
     {
-        StartCoroutine(SpawnEnemies());
+        [Tooltip("Seconds to wait before destroying or respawning after a kill.")]
+        public float postKillDelay = 5f;
+        [Tooltip("Seconds to ignore kill collisions after spawning or respawning.")]
+        public float killGraceTime = 0.2f;
+        [Tooltip("Destroy killed enemies instead of leaving them in the scene.")]
+        public bool destroyOnKill = true;
+        [Tooltip("Respawn enemies instead of destroying them after the post-kill delay.")]
+        public bool respawnOnKill = false;
     }
 
-    IEnumerator SpawnEnemies()
+    [System.Serializable]
+    public struct WaveSettings
     {
-        // Keep spawning indefinitely
+        [Tooltip("Total enemies spawned during this wave.")]
+        public int enemyCount;
+        [Tooltip("Minimum seconds between spawns for this wave.")]
+        public float spawnIntervalMin;
+        [Tooltip("Maximum seconds between spawns for this wave.")]
+        public float spawnIntervalMax;
+        [Tooltip("Canvas or GameObject to enable while this wave is active.")]
+        public GameObject waveCanvas;
+        [Tooltip("Seconds to keep the wave canvas visible before fading out. Leave 0 to use the default display duration.")]
+        public float displayDuration;
+    }
+
+    [Header("Lifecycle Settings")]
+    public LifecycleSettings lifecycle = new LifecycleSettings();
+
+    [Header("Wave Settings")]
+    public WaveSettings[] waves = new WaveSettings[5];
+    [Tooltip("Seconds to wait after showing the first wave canvas before spawning begins.")]
+    public float initialWaveDelay = 0f;
+    [Tooltip("Seconds to wait after showing the next wave canvas before its spawns begin.")]
+    public float betweenWaveDelay = 2f;
+    [Header("Wave UI Settings")]
+    [Tooltip("Seconds to blend the wave canvas alpha in from 0 to 1.")]
+    public float waveCanvasFadeInDuration = 0.5f;
+    [Tooltip("Default time to keep the wave canvas visible before fading out.")]
+    public float defaultWaveCanvasDisplayDuration = 2f;
+    [Tooltip("Seconds to blend the wave canvas alpha from 1 back down to 0.")]
+    public float waveCanvasFadeOutDuration = 0.5f;
+
+    private readonly Dictionary<EnemyChase, EnemyState> enemyStates = new Dictionary<EnemyChase, EnemyState>();
+    private Coroutine mainRoutine;
+    private int currentEnemies;
+    private bool useWaveMode;
+    private int currentWaveIndex = -1;
+    private int spawnedThisWave;
+    private int defeatedThisWave;
+    private int currentWaveTargetCount;
+    private GameObject activeWaveCanvas;
+    private CanvasGroup activeWaveCanvasGroup;
+    private Coroutine activeCanvasRoutine;
+
+    private class EnemyState
+    {
+        public Transform spawnPoint;
+        public Coroutine postKillRoutine;
+    }
+
+    private void Awake()
+    {
+        HideAllWaveCanvasesAtStartup();
+    }
+
+    private void Start()
+    {
+        if (enemyPrefab == null)
+        {
+            Debug.LogWarning($"{nameof(EnemySpawner)} on {name} has no enemy prefab assigned.", this);
+            return;
+        }
+
+        if (spawnPoints == null || spawnPoints.Length == 0)
+        {
+            Debug.LogWarning($"{nameof(EnemySpawner)} on {name} has no spawn points configured.", this);
+            return;
+        }
+
+        useWaveMode = HasWaveConfiguration();
+
+        if (useWaveMode && lifecycle.respawnOnKill)
+        {
+            Debug.LogWarning($"{nameof(EnemySpawner)} on {name} is running in wave mode, which ignores respawnOnKill. Disabling respawns for waves.", this);
+            lifecycle.respawnOnKill = false;
+        }
+
+        mainRoutine = StartCoroutine(useWaveMode ? RunWaveMode() : SpawnLoopMode());
+    }
+
+    private bool HasWaveConfiguration()
+    {
+        if (waves == null || waves.Length == 0)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < waves.Length; i++)
+        {
+            if (waves[i].enemyCount > 0)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private void OnDisable()
+    {
+        if (mainRoutine != null)
+        {
+            StopCoroutine(mainRoutine);
+            mainRoutine = null;
+        }
+
+        foreach (var entry in enemyStates)
+        {
+            if (entry.Value.postKillRoutine != null)
+            {
+                StopCoroutine(entry.Value.postKillRoutine);
+            }
+
+            entry.Key.AssignSpawner(null);
+        }
+
+        enemyStates.Clear();
+        currentEnemies = 0;
+        currentWaveIndex = -1;
+        spawnedThisWave = 0;
+        defeatedThisWave = 0;
+        currentWaveTargetCount = 0;
+        StopActiveCanvasRoutine();
+        HideActiveWaveCanvasImmediate();
+    }
+
+    private void HideAllWaveCanvasesAtStartup()
+    {
+        if (waves == null || waves.Length == 0)
+        {
+            return;
+        }
+
+        for (int i = 0; i < waves.Length; i++)
+        {
+            HideCanvasImmediate(waves[i].waveCanvas);
+        }
+    }
+
+    private IEnumerator SpawnLoopMode()
+    {
         while (true)
         {
-            // Wait a random time between spawns
-            float waitTime = Random.Range(spawnIntervalMin, spawnIntervalMax);
-            yield return new WaitForSeconds(waitTime);
-
-            // Only spawn if under the limit
-            if (currentEnemies < maxEnemies)
+            float waitTime = GetNextSpawnDelay();
+            if (waitTime > 0f)
             {
-                SpawnEnemy();
+                yield return new WaitForSeconds(waitTime);
+            }
+            else
+            {
+                yield return null;
+            }
+
+            if (!isActiveAndEnabled)
+            {
+                yield break;
+            }
+
+            if (currentEnemies >= maxEnemies)
+            {
+                continue;
+            }
+
+            TrySpawnEnemy();
+        }
+    }
+
+    private IEnumerator RunWaveMode()
+    {
+        for (int waveIndex = 0; waveIndex < waves.Length; waveIndex++)
+        {
+            WaveSettings wave = waves[waveIndex];
+            if (wave.enemyCount <= 0)
+            {
+                continue;
+            }
+
+            currentWaveIndex = waveIndex;
+            currentWaveTargetCount = Mathf.Max(0, wave.enemyCount);
+            spawnedThisWave = 0;
+            defeatedThisWave = 0;
+
+            StopActiveCanvasRoutine();
+            HideActiveWaveCanvasImmediate();
+            if (wave.waveCanvas != null)
+            {
+                activeCanvasRoutine = StartCoroutine(ShowWaveCanvas(wave.waveCanvas, wave.displayDuration));
+                if (activeCanvasRoutine != null)
+                {
+                    yield return activeCanvasRoutine;
+                    activeCanvasRoutine = null;
+                }
+            }
+
+            float preSpawnDelay = waveIndex == 0 ? Mathf.Max(0f, initialWaveDelay) : Mathf.Max(0f, betweenWaveDelay);
+            if (preSpawnDelay > 0f)
+            {
+                yield return new WaitForSeconds(preSpawnDelay);
+            }
+
+            while (defeatedThisWave < currentWaveTargetCount)
+            {
+                if (spawnedThisWave < currentWaveTargetCount && currentEnemies < maxEnemies)
+                {
+                    if (TrySpawnEnemy())
+                    {
+                        spawnedThisWave++;
+                        float wait = GetWaveSpawnDelay(wave);
+                        if (wait > 0f)
+                        {
+                            yield return new WaitForSeconds(wait);
+                        }
+                        else
+                        {
+                            yield return null;
+                        }
+                    }
+                    else
+                    {
+                        Debug.LogWarning($"{nameof(EnemySpawner)} on {name} failed to spawn an enemy for wave {waveIndex + 1}.", this);
+                        yield return new WaitForSeconds(0.5f);
+                    }
+                }
+                else
+                {
+                    yield return null;
+                }
+            }
+
+            HideActiveWaveCanvasImmediate();
+        }
+
+        currentWaveIndex = -1;
+    }
+
+    private IEnumerator ShowWaveCanvas(GameObject canvasObject, float overrideDisplayDuration)
+    {
+        if (canvasObject == null)
+        {
+            yield break;
+        }
+
+        CanvasGroup canvasGroup = canvasObject.GetComponent<CanvasGroup>();
+        if (canvasGroup == null)
+        {
+            canvasGroup = canvasObject.AddComponent<CanvasGroup>();
+        }
+
+        activeWaveCanvas = canvasObject;
+        activeWaveCanvasGroup = canvasGroup;
+
+        canvasGroup.interactable = false;
+        canvasGroup.blocksRaycasts = false;
+        canvasGroup.alpha = 0f;
+
+        canvasObject.SetActive(true);
+
+        if (waveCanvasFadeInDuration > 0f)
+        {
+            yield return FadeCanvas(canvasGroup, 0f, 1f, waveCanvasFadeInDuration);
+        }
+        else
+        {
+            canvasGroup.alpha = 1f;
+        }
+
+        float displayDuration = ResolveWaveDisplayDuration(overrideDisplayDuration);
+        if (displayDuration > 0f)
+        {
+            yield return new WaitForSeconds(displayDuration);
+        }
+
+        if (waveCanvasFadeOutDuration > 0f)
+        {
+            yield return FadeCanvas(canvasGroup, 1f, 0f, waveCanvasFadeOutDuration);
+        }
+        else
+        {
+            canvasGroup.alpha = 0f;
+        }
+
+        canvasObject.SetActive(false);
+        activeWaveCanvas = null;
+        activeWaveCanvasGroup = null;
+    }
+
+    private IEnumerator FadeCanvas(CanvasGroup canvasGroup, float startAlpha, float endAlpha, float duration)
+    {
+        if (canvasGroup == null)
+        {
+            yield break;
+        }
+
+        if (duration <= 0f)
+        {
+            canvasGroup.alpha = endAlpha;
+            yield break;
+        }
+
+        float elapsed = 0f;
+        canvasGroup.alpha = startAlpha;
+
+        while (elapsed < duration)
+        {
+            elapsed += Time.deltaTime;
+            float t = Mathf.Clamp01(elapsed / duration);
+            canvasGroup.alpha = Mathf.Lerp(startAlpha, endAlpha, t);
+            yield return null;
+        }
+
+        canvasGroup.alpha = endAlpha;
+    }
+
+    private float ResolveWaveDisplayDuration(float overrideDisplayDuration)
+    {
+        return overrideDisplayDuration > 0f
+            ? overrideDisplayDuration
+            : Mathf.Max(0f, defaultWaveCanvasDisplayDuration);
+    }
+
+    private void HideActiveWaveCanvasImmediate()
+    {
+        if (activeWaveCanvas == null)
+        {
+            return;
+        }
+
+        if (activeWaveCanvasGroup != null)
+        {
+            activeWaveCanvasGroup.alpha = 0f;
+        }
+
+        HideCanvasImmediate(activeWaveCanvas);
+        activeWaveCanvas = null;
+        activeWaveCanvasGroup = null;
+    }
+
+    private void StopActiveCanvasRoutine()
+    {
+        if (activeCanvasRoutine != null)
+        {
+            StopCoroutine(activeCanvasRoutine);
+            activeCanvasRoutine = null;
+        }
+    }
+
+    private static void HideCanvasImmediate(GameObject canvasObject)
+    {
+        if (canvasObject == null)
+        {
+            return;
+        }
+
+        CanvasGroup canvasGroup = canvasObject.GetComponent<CanvasGroup>();
+        if (canvasGroup == null)
+        {
+            canvasGroup = canvasObject.AddComponent<CanvasGroup>();
+        }
+
+        canvasGroup.alpha = 0f;
+        canvasObject.SetActive(false);
+    }
+
+    private bool TrySpawnEnemy()
+    {
+        Transform spawnPoint = GetSpawnPoint();
+        if (spawnPoint == null)
+        {
+            return false;
+        }
+
+        GameObject newEnemy = Instantiate(enemyPrefab, spawnPoint.position, spawnPoint.rotation);
+        currentEnemies++;
+
+        EnemyChase chase = newEnemy.GetComponent<EnemyChase>();
+        if (chase != null)
+        {
+            chase.AssignSpawner(this);
+            chase.ResetForSpawn(spawnPoint.position, spawnPoint.rotation, lifecycle.killGraceTime);
+
+            var state = new EnemyState
+            {
+                spawnPoint = spawnPoint,
+                postKillRoutine = null
+            };
+            enemyStates[chase] = state;
+        }
+        else
+        {
+            var tracker = newEnemy.GetComponent<SpawnedEnemyTracker>();
+            if (tracker == null)
+            {
+                tracker = newEnemy.AddComponent<SpawnedEnemyTracker>();
+            }
+            tracker.Init(this);
+        }
+
+        return true;
+    }
+
+    private Transform GetSpawnPoint()
+    {
+        if (spawnPoints == null || spawnPoints.Length == 0)
+        {
+            return null;
+        }
+
+        int index = Random.Range(0, spawnPoints.Length);
+        return spawnPoints[index];
+    }
+
+    private float GetNextSpawnDelay()
+    {
+        float min = Mathf.Min(spawnIntervalMin, spawnIntervalMax);
+        float max = Mathf.Max(spawnIntervalMin, spawnIntervalMax);
+        return Random.Range(min, max);
+    }
+
+    private float GetWaveSpawnDelay(WaveSettings wave)
+    {
+        float min = Mathf.Min(wave.spawnIntervalMin, wave.spawnIntervalMax);
+        float max = Mathf.Max(wave.spawnIntervalMin, wave.spawnIntervalMax);
+        return Random.Range(min, max);
+    }
+
+    internal void HandleEnemyKilled(EnemyChase enemy)
+    {
+        if (!enemyStates.TryGetValue(enemy, out var state))
+        {
+            return;
+        }
+
+        if (state.postKillRoutine != null)
+        {
+            return;
+        }
+
+        state.postKillRoutine = StartCoroutine(HandlePostKill(enemy, state));
+    }
+
+    private IEnumerator HandlePostKill(EnemyChase enemy, EnemyState state)
+    {
+        float wait = Mathf.Max(0f, lifecycle.postKillDelay);
+        if (wait > 0f)
+        {
+            yield return new WaitForSeconds(wait);
+        }
+
+        state.postKillRoutine = null;
+
+        if (useWaveMode)
+        {
+            bool removed = RemoveEnemy(enemy, countForWave: true);
+            if (removed && lifecycle.destroyOnKill)
+            {
+                Destroy(enemy.gameObject);
+            }
+        }
+        else
+        {
+            if (lifecycle.respawnOnKill)
+            {
+                Transform spawnPoint = state.spawnPoint != null ? state.spawnPoint : GetSpawnPoint();
+                if (spawnPoint == null)
+                {
+                    spawnPoint = transform;
+                }
+
+                state.spawnPoint = spawnPoint;
+                enemy.ResetForSpawn(spawnPoint.position, spawnPoint.rotation, lifecycle.killGraceTime);
+            }
+            else
+            {
+                bool removed = RemoveEnemy(enemy, countForWave: false);
+                if (removed && lifecycle.destroyOnKill)
+                {
+                    Destroy(enemy.gameObject);
+                }
             }
         }
     }
 
-    void SpawnEnemy()
+    internal void NotifyEnemyDestroyed(EnemyChase enemy)
     {
-        // Pick a random spawn point
-        int index = Random.Range(0, spawnPoints.Length);
-        Transform spawnPoint = spawnPoints[index];
-
-        // Instantiate the enemy
-        GameObject newEnemy = Instantiate(enemyPrefab, spawnPoint.position, spawnPoint.rotation);
-
-        // Track enemy count
-        currentEnemies++;
-
-        // Decrease count when enemy is destroyed
-        newEnemy.AddComponent<EnemyTracker>().Init(this);
+        RemoveEnemy(enemy, countForWave: useWaveMode);
     }
 
-    public void OnEnemyDestroyed()
+    private bool RemoveEnemy(EnemyChase enemy, bool countForWave)
     {
-        currentEnemies--;
+        if (!enemyStates.TryGetValue(enemy, out var state))
+        {
+            return false;
+        }
+
+        Coroutine routine = state.postKillRoutine;
+        enemyStates.Remove(enemy);
+
+        if (routine != null)
+        {
+            StopCoroutine(routine);
+        }
+
+        currentEnemies = Mathf.Max(0, currentEnemies - 1);
+        enemy.AssignSpawner(null);
+
+        if (countForWave && useWaveMode)
+        {
+            defeatedThisWave = Mathf.Min(defeatedThisWave + 1, currentWaveTargetCount);
+        }
+
+        return true;
     }
-}
 
-// Helper component for tracking when enemies die
-public class EnemyTracker : MonoBehaviour
-{
-    private EnemySpawner spawner;
-
-    public void Init(EnemySpawner spawner)
+    private void HandleUntrackedEnemyDestroyed()
     {
-        this.spawner = spawner;
+        currentEnemies = Mathf.Max(0, currentEnemies - 1);
+
+        if (useWaveMode)
+        {
+            defeatedThisWave = Mathf.Min(defeatedThisWave + 1, currentWaveTargetCount);
+        }
     }
 
-    void OnDestroy()
+    private class SpawnedEnemyTracker : MonoBehaviour
     {
-        if (spawner != null)
-            spawner.OnEnemyDestroyed();
+        private EnemySpawner owner;
+
+        public void Init(EnemySpawner spawner)
+        {
+            owner = spawner;
+        }
+
+        private void OnDestroy()
+        {
+            if (owner != null)
+            {
+                owner.HandleUntrackedEnemyDestroyed();
+            }
+        }
     }
 }
