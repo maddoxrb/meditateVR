@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.AI;
+using UnityEngine.Serialization;
 
 public class EnemyChase : MonoBehaviour
 {
@@ -8,14 +9,9 @@ public class EnemyChase : MonoBehaviour
     public float attackDistance = 1.5f;
     [Tooltip("Collision impulse magnitude that will kill the enemy.")]
     public float killImpulseThreshold = 5f;
-    [Tooltip("Destroy the enemy GameObject when killed.")]
-    public bool destroyOnKill = true;
-    [Tooltip("Respawn the enemy after the post-kill delay instead of leaving it dead.")]
-    public bool respawnOnKill = false;
-    [Tooltip("Seconds to wait before destroying or respawning after a kill.")]
-    public float postKillDelay = 5f;
-    [Tooltip("Seconds to ignore kill collisions after spawning or respawning.")]
-    public float spawnKillGraceTime = 0.2f;
+    [Tooltip("Seconds to ignore kill collisions after spawning when no spawner overrides this value.")]
+    [FormerlySerializedAs("spawnKillGraceTime")]
+    [SerializeField] private float defaultKillGraceTime = 0.2f;
     [Tooltip("If enabled, only collisions from the specified GameObject can trigger a kill.")]
     public bool requireSpecificKiller = false;
     [Tooltip("GameObject required to trigger a kill when 'requireSpecificKiller' is true.")]
@@ -35,49 +31,20 @@ public class EnemyChase : MonoBehaviour
     private bool isKilled;
     private Vector3 spawnPosition;
     private Quaternion spawnRotation;
-    private Coroutine postKillRoutine;
-    private float spawnTime;
     private Vector3 lastDestination;
     private int currentAttackVariant = -1;
+    private EnemySpawner spawner;
+    private float killProtectionEndTime;
+    private bool spawnStateInitialized;
+    private bool initialized;
 
     void Start()
     {
-        // Find player by tag
-        GameObject playerObj = GameObject.FindGameObjectWithTag("Player");
-        if (playerObj != null)
-        {
-            player = playerObj.transform;
-        }
+        InitializeIfNeeded();
 
-        // Get NavMeshAgent component
-        agent = GetComponent<NavMeshAgent>();
-        if (agent != null)
+        if (!spawnStateInitialized)
         {
-            agent.speed = speed;
-            agent.stoppingDistance = attackDistance;
-        }
-
-        spawnPosition = transform.position;
-        spawnRotation = transform.rotation;
-        spawnTime = Time.time;
-        lastDestination = spawnPosition;
-        currentAttackVariant = -1;
-
-        if (animator == null)
-        {
-            animator = GetComponent<Animator>();
-            if (animator == null)
-            {
-                animator = GetComponentInChildren<Animator>();
-            }
-        }
-
-        if (animator != null)
-        {
-            animator.SetBool(IsKilledHash, false);
-            animator.SetBool(IsChasingHash, false);
-            animator.SetBool(IsAttackingHash1, false);
-            animator.SetBool(IsAttackingHash2, false);
+            ResetForSpawn(transform.position, transform.rotation, defaultKillGraceTime);
         }
     }
 
@@ -139,8 +106,7 @@ public class EnemyChase : MonoBehaviour
             return;
         }
 
-        float timeSinceSpawn = Time.time - spawnTime;
-        if (timeSinceSpawn < spawnKillGraceTime)
+        if (Time.time < killProtectionEndTime)
         {
             return;
         }
@@ -156,69 +122,8 @@ public class EnemyChase : MonoBehaviour
         float impulse = collision.impulse.magnitude;
         if (impulse >= killImpulseThreshold)
         {
-            isKilled = true;
-            animator.SetBool(IsChasingHash, false);
-            animator.SetBool(IsAttackingHash1, false);
-            animator.SetBool(IsAttackingHash2, false);
-            animator.SetBool(IsKilledHash, true);
-            currentAttackVariant = -1;
-
-            if (agent != null)
-            {
-                agent.isStopped = true;
-                agent.ResetPath();
-            }
-
-            if (postKillRoutine != null)
-            {
-                StopCoroutine(postKillRoutine);
-            }
-            postKillRoutine = StartCoroutine(HandlePostKill());
+            HandleKilled();
         }
-    }
-
-    private System.Collections.IEnumerator HandlePostKill()
-    {
-        float wait = Mathf.Max(0f, postKillDelay);
-        if (wait > 0f)
-        {
-            yield return new WaitForSeconds(wait);
-        }
-
-        if (respawnOnKill)
-        {
-            Respawn();
-        }
-        else if (destroyOnKill)
-        {
-            Destroy(gameObject);
-        }
-    }
-
-    private void Respawn()
-    {
-        isKilled = false;
-
-        if (animator != null)
-        {
-            animator.SetBool(IsKilledHash, false);
-            animator.SetBool(IsChasingHash, false);
-            animator.SetBool(IsAttackingHash1, false);
-            animator.SetBool(IsAttackingHash2, false);
-        }
-
-        transform.SetPositionAndRotation(spawnPosition, spawnRotation);
-
-        if (agent != null)
-        {
-            agent.Warp(spawnPosition);
-            agent.isStopped = false;
-        }
-
-        spawnTime = Time.time;
-        lastDestination = spawnPosition;
-        currentAttackVariant = -1;
-        postKillRoutine = null;
     }
 
     private bool TryGetChasePosition(Vector3 playerPosition, out Vector3 chasePosition)
@@ -251,5 +156,118 @@ public class EnemyChase : MonoBehaviour
         }
 
         return false;
+    }
+
+    public void AssignSpawner(EnemySpawner owner)
+    {
+        spawner = owner;
+    }
+
+    public void ResetForSpawn(Vector3 position, Quaternion rotation, float killGraceDuration)
+    {
+        InitializeIfNeeded();
+
+        if (player == null)
+        {
+            GameObject playerObj = GameObject.FindGameObjectWithTag("Player");
+            if (playerObj != null)
+            {
+                player = playerObj.transform;
+            }
+        }
+
+        spawnPosition = position;
+        spawnRotation = rotation;
+        transform.SetPositionAndRotation(position, rotation);
+
+        if (agent != null)
+        {
+            agent.Warp(position);
+            agent.speed = speed;
+            agent.stoppingDistance = attackDistance;
+            agent.isStopped = false;
+            agent.ResetPath();
+        }
+
+        isKilled = false;
+        lastDestination = spawnPosition;
+        currentAttackVariant = -1;
+        killProtectionEndTime = Time.time + Mathf.Max(0f, killGraceDuration);
+        spawnStateInitialized = true;
+
+        if (animator != null)
+        {
+            animator.SetBool(IsKilledHash, false);
+            animator.SetBool(IsChasingHash, false);
+            animator.SetBool(IsAttackingHash1, false);
+            animator.SetBool(IsAttackingHash2, false);
+        }
+    }
+
+    public bool IsKilled => isKilled;
+
+    private void HandleKilled()
+    {
+        if (isKilled)
+        {
+            return;
+        }
+
+        isKilled = true;
+
+        if (animator != null)
+        {
+            animator.SetBool(IsChasingHash, false);
+            animator.SetBool(IsAttackingHash1, false);
+            animator.SetBool(IsAttackingHash2, false);
+            animator.SetBool(IsKilledHash, true);
+        }
+
+        currentAttackVariant = -1;
+
+        if (agent != null)
+        {
+            agent.isStopped = true;
+            agent.ResetPath();
+        }
+
+        spawner?.HandleEnemyKilled(this);
+    }
+
+    private void InitializeIfNeeded()
+    {
+        if (initialized)
+        {
+            return;
+        }
+
+        GameObject playerObj = GameObject.FindGameObjectWithTag("Player");
+        if (playerObj != null)
+        {
+            player = playerObj.transform;
+        }
+
+        agent = GetComponent<NavMeshAgent>();
+        if (agent != null)
+        {
+            agent.speed = speed;
+            agent.stoppingDistance = attackDistance;
+        }
+
+        if (animator == null)
+        {
+            animator = GetComponent<Animator>();
+            if (animator == null)
+            {
+                animator = GetComponentInChildren<Animator>();
+            }
+        }
+
+        initialized = true;
+    }
+
+    private void OnDestroy()
+    {
+        spawner?.NotifyEnemyDestroyed(this);
     }
 }
