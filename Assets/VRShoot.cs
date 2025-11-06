@@ -2,6 +2,7 @@ using UnityEngine;
 using Oculus.Interaction;
 using System;
 using System.Reflection;
+using System.Collections.Generic;
 
 public class VRShoot : MonoBehaviour
 {
@@ -19,6 +20,9 @@ public class VRShoot : MonoBehaviour
     private bool isHeld = false;
     private OVRInput.Controller holdingController;
     private string holdingInteractorName = "";   // best-effort name of the interactor object
+    private readonly Dictionary<int, OVRInput.Controller> pointerControllers = new Dictionary<int, OVRInput.Controller>();
+    private bool leftHandHolding;
+    private bool rightHandHolding;
 
     void Awake()
     {
@@ -46,95 +50,163 @@ public class VRShoot : MonoBehaviour
         switch (evt.Type)
         {
             case PointerEventType.Select:   // grabbed
-                isHeld = true;
+            {
+                var controller = ResolveControllerFromEvent(evt, out var source, out var interactorName);
 
-                var interactorController = OVRInput.Controller.None;
-                string source = "unknown";
-                string interactorName = "";
+                pointerControllers[evt.Identifier] = controller;
 
-                // Try to get a direct interactor reference from the PointerEvent if available.
-                var evtType = evt.GetType();
-                var selectingProp = evtType.GetProperty("SelectingInteractor");
-                var interactorProp = evtType.GetProperty("Interactor");
-
-                object selectingObj = null;
-                if (selectingProp != null)
+                if (controller != OVRInput.Controller.None)
                 {
-                    selectingObj = selectingProp.GetValue(evt, null);
-                }
-                else if (interactorProp != null)
-                {
-                    selectingObj = interactorProp.GetValue(evt, null);
+                    holdingController = controller;
+                    holdingInteractorName = interactorName;
                 }
 
-                // 1) Handedness property on the interactor component (most robust in newer SDKs)
-                if (selectingObj != null && interactorController == OVRInput.Controller.None)
-                {
-                    interactorController = TryFromHandedness(selectingObj, out source);
-                }
-
-                // Attempt to resolve a GameObject for name/component checks
-                GameObject interactorGO = ResolveGameObject(selectingObj);
-                if (interactorGO != null)
-                {
-                    interactorName = interactorGO.name;
-                }
-
-                // 2) OVRGrabber component name hint (legacy grabber setups)
-                if (interactorGO != null && interactorController == OVRInput.Controller.None)
-                {
-                    interactorController = TryFromOVRGrabber(interactorGO, out source);
-                }
-
-                // 3) Name-based fallback (Left/Right in object names)
-                if (interactorGO != null && interactorController == OVRInput.Controller.None)
-                {
-                    interactorController = TryFromName(interactorGO.name, out source);
-                }
-
-                // 4) Identifier-based mapping as last resort
-                if (interactorController == OVRInput.Controller.None)
-                {
-                    interactorController = MapInteractorToController(evt.Identifier);
-                    if (interactorController != OVRInput.Controller.None)
-                        source = $"identifier:{evt.Identifier}";
-                }
-
-                // 5) Live input-state fallback: which controller is actively pressed this frame
-                if (interactorController == OVRInput.Controller.None)
-                {
-                    var byButtons = DetectPressingController();
-                    if (byButtons != OVRInput.Controller.None)
-                    {
-                        interactorController = byButtons;
-                        source = "buttons";
-                    }
-                }
-
-                // 6) Distance fallback using optional anchors
-                if (interactorController == OVRInput.Controller.None)
-                {
-                    var byDistance = DetectNearestAnchorTo(transform.position);
-                    if (byDistance != OVRInput.Controller.None)
-                    {
-                        interactorController = byDistance;
-                        source = "distance";
-                    }
-                }
-
-                holdingController = interactorController;
-                holdingInteractorName = interactorName;
-                LogHold("HandlePointerEvent.Select", holdingController, $"source={source}, interactorName={interactorName}");
+                RefreshHoldingState();
+                LogHold("HandlePointerEvent.Select", controller, $"source={source}, interactorName={interactorName}");
 
                 break;
+            }
 
             case PointerEventType.Unselect: // released
-                LogHold("HandlePointerEvent.Unselect", holdingController, "released");
-                isHeld = false;
-                holdingController = OVRInput.Controller.None;
-                holdingInteractorName = "";
+            {
+                var controller = ResolveControllerFromEvent(evt, out var source, out _);
+
+                if (controller == OVRInput.Controller.None && pointerControllers.TryGetValue(evt.Identifier, out var tracked))
+                {
+                    controller = tracked;
+                    source = $"tracked:{evt.Identifier}";
+                }
+
+                pointerControllers.Remove(evt.Identifier);
+
+                RefreshHoldingState();
+
+                LogHold("HandlePointerEvent.Unselect", controller, $"source={source}, remainingLeft={leftHandHolding}, remainingRight={rightHandHolding}");
                 break;
+            }
         }
+    }
+
+    private OVRInput.Controller ResolveControllerFromEvent(PointerEvent evt, out string source, out string interactorName)
+    {
+        var interactorController = OVRInput.Controller.None;
+        source = "unknown";
+        interactorName = "";
+
+        // Try to get a direct interactor reference from the PointerEvent if available.
+        var evtType = evt.GetType();
+        var selectingProp = evtType.GetProperty("SelectingInteractor");
+        var interactorProp = evtType.GetProperty("Interactor");
+
+        object selectingObj = null;
+        if (selectingProp != null)
+        {
+            selectingObj = selectingProp.GetValue(evt, null);
+        }
+        else if (interactorProp != null)
+        {
+            selectingObj = interactorProp.GetValue(evt, null);
+        }
+
+        // 1) Handedness property on the interactor component (most robust in newer SDKs)
+        if (selectingObj != null && interactorController == OVRInput.Controller.None)
+        {
+            interactorController = TryFromHandedness(selectingObj, out source);
+        }
+
+        // Attempt to resolve a GameObject for name/component checks
+        GameObject interactorGO = ResolveGameObject(selectingObj);
+        if (interactorGO != null)
+        {
+            interactorName = interactorGO.name;
+        }
+
+        // 2) OVRGrabber component name hint (legacy grabber setups)
+        if (interactorGO != null && interactorController == OVRInput.Controller.None)
+        {
+            interactorController = TryFromOVRGrabber(interactorGO, out source);
+        }
+
+        // 3) Name-based fallback (Left/Right in object names)
+        if (interactorGO != null && interactorController == OVRInput.Controller.None)
+        {
+            interactorController = TryFromName(interactorGO.name, out source);
+        }
+
+        // 4) Identifier-based mapping as last resort
+        if (interactorController == OVRInput.Controller.None)
+        {
+            interactorController = MapInteractorToController(evt.Identifier);
+            if (interactorController != OVRInput.Controller.None)
+                source = $"identifier:{evt.Identifier}";
+        }
+
+        // 5) Live input-state fallback: which controller is actively pressed this frame
+        if (interactorController == OVRInput.Controller.None)
+        {
+            var byButtons = DetectPressingController();
+            if (byButtons != OVRInput.Controller.None)
+            {
+                interactorController = byButtons;
+                source = "buttons";
+            }
+        }
+
+        // 6) Distance fallback using optional anchors
+        if (interactorController == OVRInput.Controller.None)
+        {
+            var byDistance = DetectNearestAnchorTo(transform.position);
+            if (byDistance != OVRInput.Controller.None)
+            {
+                interactorController = byDistance;
+                source = "distance";
+            }
+        }
+
+        return interactorController;
+    }
+
+    private void RefreshHoldingState()
+    {
+        leftHandHolding = false;
+        rightHandHolding = false;
+
+        foreach (var controller in pointerControllers.Values)
+        {
+            if (controller == OVRInput.Controller.LTouch)
+            {
+                leftHandHolding = true;
+            }
+            else if (controller == OVRInput.Controller.RTouch)
+            {
+                rightHandHolding = true;
+            }
+        }
+
+        isHeld = leftHandHolding || rightHandHolding || pointerControllers.Count > 0;
+        holdingController = ChooseDominantController(holdingController);
+
+        if (!isHeld)
+        {
+            holdingController = OVRInput.Controller.None;
+            holdingInteractorName = "";
+        }
+    }
+
+    private OVRInput.Controller ChooseDominantController(OVRInput.Controller previous)
+    {
+        if (leftHandHolding && rightHandHolding)
+        {
+            if (previous == OVRInput.Controller.LTouch || previous == OVRInput.Controller.RTouch)
+                return previous;
+            return OVRInput.Controller.LTouch;
+        }
+
+        if (leftHandHolding) return OVRInput.Controller.LTouch;
+        if (rightHandHolding) return OVRInput.Controller.RTouch;
+        if (pointerControllers.Count > 0) return previous;
+
+        return OVRInput.Controller.None;
     }
 
     void Update()
@@ -142,29 +214,25 @@ public class VRShoot : MonoBehaviour
         if (!isHeld) return;
 
         bool pressed = false;
+        bool anySpecificHand = leftHandHolding || rightHandHolding;
 
-        // If we know which controller is holding the gun, only check that controller's trigger.
-        if (holdingController != OVRInput.Controller.None)
-        {
-            pressed = OVRInput.GetDown(shootButton, holdingController);
-        }
-        else
-        {
-            // Fallback: check both hands (legacy behavior)
-            pressed = OVRInput.GetDown(shootButton, OVRInput.Controller.LTouch) ||
-                      OVRInput.GetDown(shootButton, OVRInput.Controller.RTouch);
-        }
+        if (leftHandHolding)
+            pressed |= OVRInput.GetDown(shootButton, OVRInput.Controller.LTouch);
 
-        // Ignore other hand even if its trigger is pressed this frame
-        if (holdingController == OVRInput.Controller.LTouch)
+        if (rightHandHolding)
+            pressed |= OVRInput.GetDown(shootButton, OVRInput.Controller.RTouch);
+
+        if (!anySpecificHand)
         {
-            if (OVRInput.GetDown(shootButton, OVRInput.Controller.RTouch))
-                LogHold("Update.IgnoredOther", OVRInput.Controller.RTouch, "other hand pressed but not holding");
-        }
-        else if (holdingController == OVRInput.Controller.RTouch)
-        {
-            if (OVRInput.GetDown(shootButton, OVRInput.Controller.LTouch))
-                LogHold("Update.IgnoredOther", OVRInput.Controller.LTouch, "other hand pressed but not holding");
+            if (holdingController != OVRInput.Controller.None)
+            {
+                pressed |= OVRInput.GetDown(shootButton, holdingController);
+            }
+            else
+            {
+                pressed |= OVRInput.GetDown(shootButton, OVRInput.Controller.LTouch) ||
+                           OVRInput.GetDown(shootButton, OVRInput.Controller.RTouch);
+            }
         }
 
         if (pressed)

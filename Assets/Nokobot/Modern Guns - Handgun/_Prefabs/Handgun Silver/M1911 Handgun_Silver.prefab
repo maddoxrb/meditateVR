@@ -78,7 +78,7 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 1690370004738036, guid: a78a725941312494b930d664f3b315d0, type: 3}
       propertyPath: m_Name
-      value: M1911 Handgun_Silver
+      value: M1911 Handgun_Steel
       objectReference: {fileID: 0}
     - target: {fileID: 4878850369403266, guid: a78a725941312494b930d664f3b315d0, type: 3}
       propertyPath: m_LocalPosition.x
@@ -124,12 +124,12 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
-    - target: {fileID: 1792479375520978528, guid: a78a725941312494b930d664f3b315d0,
-        type: 3}
-      propertyPath: m_Controller
-      value: 
-      objectReference: {fileID: 9100000, guid: 03d1fe4e93c9d4445b3a611df2ee5713, type: 2}
     - target: {fileID: 8807204533817979089, guid: a78a725941312494b930d664f3b315d0,
+        type: 3}
+      propertyPath: m_Materials.Array.data[0]
+      value: 
+      objectReference: {fileID: 2100000, guid: a22ca1073de33674b8cd0036fcb92947, type: 2}
+    - target: {fileID: 8807204533817979101, guid: a78a725941312494b930d664f3b315d0,
         type: 3}
       propertyPath: m_Materials.Array.data[0]
       value: 
@@ -145,11 +145,6 @@ PrefabInstance:
       value: 
       objectReference: {fileID: 2100000, guid: a22ca1073de33674b8cd0036fcb92947, type: 2}
     - target: {fileID: 8807204533817979095, guid: a78a725941312494b930d664f3b315d0,
-        type: 3}
-      propertyPath: m_Materials.Array.data[0]
-      value: 
-      objectReference: {fileID: 2100000, guid: a22ca1073de33674b8cd0036fcb92947, type: 2}
-    - target: {fileID: 8807204533817979101, guid: a78a725941312494b930d664f3b315d0,
         type: 3}
       propertyPath: m_Materials.Array.data[0]
       value: 

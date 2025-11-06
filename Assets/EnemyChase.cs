@@ -14,8 +14,7 @@ public class EnemyChase : MonoBehaviour
     [SerializeField] private float defaultKillGraceTime = 0.2f;
     [Tooltip("If enabled, only collisions from the specified GameObject can trigger a kill.")]
     public bool requireSpecificKiller = false;
-    [Tooltip("GameObject required to trigger a kill when 'requireSpecificKiller' is true.")]
-    public GameObject specificKiller;
+    [Tooltip("GameObject required to trigger a kill when 'requireSpecificKiller' is true.")]                                public GameObject specificKiller;
     [Tooltip("Maximum distance to search above/below the player for a valid NavMesh point when the player is airborne.")]
     [SerializeField] private float navSampleDistance = 4f;
     [Tooltip("Optional layers considered ground when raycasting beneath the player as a fallback.")]
@@ -37,6 +36,11 @@ public class EnemyChase : MonoBehaviour
     private float killProtectionEndTime;
     private bool spawnStateInitialized;
     private bool initialized;
+    [SerializeField] private AudioSource audioSource; // optional, falls back to local AudioSource
+    [SerializeField] private AudioClip[] attackAudioClips;
+    [SerializeField] private float attackAudioInterval = 1.5f;
+    private bool isInAttackState;
+    private float nextAttackAudioTime;
 
     void Start()
     {
@@ -77,23 +81,46 @@ public class EnemyChase : MonoBehaviour
                 Vector3 enemyFlat = new Vector3(transform.position.x, 0f, transform.position.z);
                 Vector3 playerFlat = new Vector3(player.position.x, 0f, player.position.z);
                 float distanceToPlayer = Vector3.Distance(enemyFlat, playerFlat);
+                Debug.Log("Distance to player: " + distanceToPlayer);
                 bool shouldAttack = distanceToPlayer <= attackDistance;
+                Debug.Log("Should Attack: " + shouldAttack);
 
-                animator.SetBool(IsChasingHash, !shouldAttack);
                 if (shouldAttack)
                 {
-                    if (currentAttackVariant == -1)
+                    Debug.Log("Chasing: " + animator.GetBool("isChasing"));
+                    animator.SetBool(IsChasingHash, false);
+                    animator.SetBool(IsAttackingHash1, true);
+                    Debug.Log(animator.GetBool("isAttacking1"));
+                    animator.SetBool(IsAttackingHash2, false);
+                    if (!agent.isStopped)
                     {
-                        currentAttackVariant = Random.value > 0.5f ? 1 : 2;
-                        animator.SetBool(IsAttackingHash1, currentAttackVariant == 1);
-                        animator.SetBool(IsAttackingHash2, currentAttackVariant == 2);
+                        agent.isStopped = true;
+                    }
+                    if (!isInAttackState)
+                    {
+                        isInAttackState = true;
+                        nextAttackAudioTime = Time.time;
+                    }
+
+                    if (Time.time >= nextAttackAudioTime)
+                    {
+                        PlayAttackAudio();
+                        float interval = Mathf.Max(attackAudioInterval, 0f);
+                        nextAttackAudioTime = Time.time + interval;
                     }
                 }
                 else
                 {
+                    animator.SetBool(IsChasingHash, true);
                     animator.SetBool(IsAttackingHash1, false);
                     animator.SetBool(IsAttackingHash2, false);
+                    if (agent.isStopped)
+                    {
+                        agent.isStopped = false;
+                    }
                     currentAttackVariant = -1;
+                    isInAttackState = false;
+                    nextAttackAudioTime = 0f;
                 }
             }
         }
@@ -194,6 +221,8 @@ public class EnemyChase : MonoBehaviour
         currentAttackVariant = -1;
         killProtectionEndTime = Time.time + Mathf.Max(0f, killGraceDuration);
         spawnStateInitialized = true;
+        isInAttackState = false;
+        nextAttackAudioTime = 0f;
 
         if (animator != null)
         {
@@ -224,6 +253,8 @@ public class EnemyChase : MonoBehaviour
         }
 
         currentAttackVariant = -1;
+        isInAttackState = false;
+        nextAttackAudioTime = 0f;
 
         if (agent != null)
         {
@@ -263,11 +294,41 @@ public class EnemyChase : MonoBehaviour
             }
         }
 
+        if (audioSource == null)
+        {
+            audioSource = GetComponent<AudioSource>();
+        }
+
         initialized = true;
     }
 
     private void OnDestroy()
     {
         spawner?.NotifyEnemyDestroyed(this);
+    }
+
+    private void PlayAttackAudio()
+    {
+        if (attackAudioClips == null || attackAudioClips.Length == 0)
+        {
+            return;
+        }
+
+        AudioSource source = audioSource;
+        if (source == null)
+        {
+            source = GetComponent<AudioSource>();
+            audioSource = source;
+        }
+
+        if (source != null)
+        {
+            int clipIndex = Random.Range(0, attackAudioClips.Length);
+            AudioClip clip = attackAudioClips[clipIndex];
+            if (clip != null)
+            {
+                source.PlayOneShot(clip);
+            }
+        }
     }
 }
