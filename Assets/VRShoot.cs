@@ -1,8 +1,9 @@
-using UnityEngine;
-using Oculus.Interaction;
 using System;
-using System.Reflection;
+using System.Collections;
 using System.Collections.Generic;
+using System.Reflection;
+using Oculus.Interaction;
+using UnityEngine;
 
 public class VRShoot : MonoBehaviour
 {
@@ -12,9 +13,15 @@ public class VRShoot : MonoBehaviour
     [Header("Optional anchors for distance fallback")]
     [SerializeField] private Transform leftHandAnchor;   // e.g., LeftHandAnchor or LeftControllerAnchor
     [SerializeField] private Transform rightHandAnchor;  // e.g., RightHandAnchor or RightControllerAnchor
+    [Header("Haptic feedback")]
+    [SerializeField, Range(0f, 1f)] private float hapticAmplitude = 0.75f;
+    [SerializeField, Range(0f, 1f)] private float hapticFrequency = 0.35f;
+    [SerializeField, Min(0f)] private float hapticDuration = 0.1f;
 
     private Grabbable grabbable;
     private AudioSource audioSource;
+    private Coroutine hapticsRoutine;
+    private OVRInput.Controller hapticsController = OVRInput.Controller.None;
 
     // track whether we’re held and which hand is holding
     private bool isHeld = false;
@@ -42,6 +49,7 @@ public class VRShoot : MonoBehaviour
     {
         if (grabbable != null)
             grabbable.WhenPointerEventRaised -= HandlePointerEvent;
+        StopHapticsRoutine();
         LogHold("OnDisable", holdingController, "unsubscribed from pointer events");
     }
 
@@ -214,24 +222,49 @@ public class VRShoot : MonoBehaviour
         if (!isHeld) return;
 
         bool pressed = false;
+        var firingController = OVRInput.Controller.None;
         bool anySpecificHand = leftHandHolding || rightHandHolding;
 
         if (leftHandHolding)
-            pressed |= OVRInput.GetDown(shootButton, OVRInput.Controller.LTouch);
+        {
+            if (OVRInput.GetDown(shootButton, OVRInput.Controller.LTouch))
+            {
+                pressed = true;
+                firingController = OVRInput.Controller.LTouch;
+            }
+        }
 
         if (rightHandHolding)
-            pressed |= OVRInput.GetDown(shootButton, OVRInput.Controller.RTouch);
+        {
+            if (!pressed && OVRInput.GetDown(shootButton, OVRInput.Controller.RTouch))
+            {
+                pressed = true;
+                firingController = OVRInput.Controller.RTouch;
+            }
+        }
 
         if (!anySpecificHand)
         {
             if (holdingController != OVRInput.Controller.None)
             {
-                pressed |= OVRInput.GetDown(shootButton, holdingController);
+                if (!pressed && OVRInput.GetDown(shootButton, holdingController))
+                {
+                    pressed = true;
+                    firingController = holdingController;
+                }
             }
             else
             {
-                pressed |= OVRInput.GetDown(shootButton, OVRInput.Controller.LTouch) ||
-                           OVRInput.GetDown(shootButton, OVRInput.Controller.RTouch);
+                if (!pressed && OVRInput.GetDown(shootButton, OVRInput.Controller.LTouch))
+                {
+                    pressed = true;
+                    firingController = OVRInput.Controller.LTouch;
+                }
+                else if (!pressed && OVRInput.GetDown(shootButton, OVRInput.Controller.RTouch))
+                {
+                    pressed = true;
+                    firingController = OVRInput.Controller.RTouch;
+                }
             }
         }
 
@@ -243,6 +276,7 @@ public class VRShoot : MonoBehaviour
                 simpleShoot.StartShoot();
             if (audioSource != null)
                 audioSource.Play();
+            TriggerHapticPulse(firingController);
         }
     }
 
@@ -419,5 +453,36 @@ public class VRShoot : MonoBehaviour
         if (dL < dR) return OVRInput.Controller.LTouch;
         if (dR < dL) return OVRInput.Controller.RTouch;
         return OVRInput.Controller.None;
+    }
+
+    private void TriggerHapticPulse(OVRInput.Controller controller)
+    {
+        if (controller == OVRInput.Controller.None) return;
+
+        StopHapticsRoutine();
+        hapticsController = controller;
+        hapticsRoutine = StartCoroutine(HapticsBurst());
+    }
+
+    private IEnumerator HapticsBurst()
+    {
+        OVRInput.SetControllerVibration(hapticFrequency, hapticAmplitude, hapticsController);
+        yield return new WaitForSeconds(hapticDuration);
+        StopHapticsRoutine();
+    }
+
+    private void StopHapticsRoutine()
+    {
+        if (hapticsRoutine != null)
+        {
+            StopCoroutine(hapticsRoutine);
+            hapticsRoutine = null;
+        }
+
+        if (hapticsController != OVRInput.Controller.None)
+        {
+            OVRInput.SetControllerVibration(0f, 0f, hapticsController);
+            hapticsController = OVRInput.Controller.None;
+        }
     }
 }

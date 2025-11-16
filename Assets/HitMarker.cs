@@ -17,15 +17,37 @@ public class HitMarker : MonoBehaviour
     [Tooltip("If true the particle effect will be rotated to face away from the surface normal.")]
     private bool alignToSurfaceNormal = true;
 
+    [Header("Audio")]
+    [SerializeField]
+    [Tooltip("Enable to play the assigned audio source whenever the hit effect is triggered.")]
+    private bool playAudioOnHit = false;
+
+    [SerializeField]
+    [Tooltip("Optional audio source to play when a hit is registered.")]
+    private AudioSource hitAudioSource;
+
     private void OnCollisionEnter(Collision collision)
     {
-        if (hitEffectPrefab == null)
+        bool shouldSpawnEffect = hitEffectPrefab != null;
+        bool shouldPlayAudio = playAudioOnHit && hitAudioSource != null;
+
+        if (!shouldSpawnEffect && !shouldPlayAudio)
         {
             return;
         }
 
         // collision.impulse is the total impulse applied to resolve the collision.
         if (collision.impulse.magnitude < impulseThreshold)
+        {
+            return;
+        }
+
+        if (shouldPlayAudio)
+        {
+            PlayHitAudio();
+        }
+
+        if (!shouldSpawnEffect)
         {
             return;
         }
@@ -76,5 +98,15 @@ public class HitMarker : MonoBehaviour
 
             Destroy(instance.gameObject, maxLifetime);
         }
+    }
+
+    private void PlayHitAudio()
+    {
+        if (hitAudioSource.isPlaying)
+        {
+            hitAudioSource.Stop();
+        }
+
+        hitAudioSource.Play();
     }
 }

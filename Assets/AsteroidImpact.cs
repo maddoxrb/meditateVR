@@ -8,8 +8,7 @@ public class AsteroidImpact : MonoBehaviour
     [SerializeField] private ParticleSystem fallbackImpactEffect;
     [SerializeField] private LayerMask groundLayers = Physics.DefaultRaycastLayers;
     [Header("Audio")]
-    [SerializeField] private AudioClip impactAudioClip;
-    [SerializeField, Range(0f, 1f)] private float impactAudioVolume = 1f;
+    [SerializeField] private AudioSource impactAudioSourcePrefab;
 
     private Vector3 travelDirection = Vector3.down;
     private float travelSpeed;
@@ -120,11 +119,23 @@ public class AsteroidImpact : MonoBehaviour
 
     private void PlayImpactAudio(Vector3 point)
     {
-        if (impactAudioClip == null)
+        if (impactAudioSourcePrefab == null)
         {
             return;
         }
 
-        AudioSource.PlayClipAtPoint(impactAudioClip, point, Mathf.Clamp01(impactAudioVolume));
+        AudioSource instance = Instantiate(impactAudioSourcePrefab, point, Quaternion.identity);
+        instance.transform.position = point;
+        instance.Play();
+
+        float clipDuration = 0f;
+        if (instance.clip != null)
+        {
+            float pitch = Mathf.Approximately(instance.pitch, 0f) ? 1f : instance.pitch;
+            clipDuration = instance.clip.length / Mathf.Abs(pitch);
+        }
+
+        float lifetime = clipDuration > 0f ? clipDuration : 1f;
+        Destroy(instance.gameObject, lifetime);
     }
 }

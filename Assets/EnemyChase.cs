@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.AI;
 using UnityEngine.Serialization;
+using System.Collections.Generic;
 
 public class EnemyChase : MonoBehaviour
 {
@@ -19,6 +20,19 @@ public class EnemyChase : MonoBehaviour
     [SerializeField] private float navSampleDistance = 4f;
     [Tooltip("Optional layers considered ground when raycasting beneath the player as a fallback.")]
     [SerializeField] private LayerMask groundLayers = ~0;
+
+    [Header("Bullet Kill Settings")]
+    [Tooltip("If enabled, the enemy dies after a set number of qualifying bullet collisions instead of by collision impulse.")]
+    [SerializeField] private bool useBulletHitCount = false;
+    [Tooltip("Number of qualifying bullet collisions required to kill the enemy.")]
+    [Min(1)]
+    [SerializeField] private int requiredBulletHits = 3;
+    [Tooltip("Only these bullet prefabs count toward the hit count. Leave empty to allow any (subject to tags).")]
+    [SerializeField] private GameObject[] qualifyingBulletPrefabs;
+    [Tooltip("Additional tags that identify qualifying bullets. Leave empty to ignore tags.")]
+    [SerializeField] private string[] qualifyingBulletTags;
+    [Tooltip("If disabled, the same bullet instance will only ever count once even if it collides multiple times.")]
+    [SerializeField] private bool countMultipleHitsFromSameInstance = true;
 
     private Transform player;
     private NavMeshAgent agent;
@@ -41,6 +55,8 @@ public class EnemyChase : MonoBehaviour
     [SerializeField] private float attackAudioInterval = 1.5f;
     private bool isInAttackState;
     private float nextAttackAudioTime;
+    private int bulletHitCount;
+    private HashSet<int> countedBulletInstanceIds;
 
     void Start()
     {
@@ -138,6 +154,38 @@ public class EnemyChase : MonoBehaviour
             return;
         }
 
+        if (useBulletHitCount)
+        {
+            if (!IsQualifyingBullet(collision.gameObject))
+            {
+                return;
+            }
+
+            // Optionally avoid counting the same bullet instance multiple times
+            if (!countMultipleHitsFromSameInstance)
+            {
+                if (countedBulletInstanceIds == null)
+                {
+                    countedBulletInstanceIds = new HashSet<int>();
+                }
+                var root = collision.transform != null && collision.transform.root != null
+                    ? collision.transform.root.gameObject
+                    : collision.gameObject;
+                int id = root.GetInstanceID();
+                if (!countedBulletInstanceIds.Add(id))
+                {
+                    return;
+                }
+            }
+
+            bulletHitCount++;
+            if (bulletHitCount >= Mathf.Max(1, requiredBulletHits))
+            {
+                HandleKilled();
+            }
+            return;
+        }
+
         if (requireSpecificKiller)
         {
             if (specificKiller == null || collision.gameObject != specificKiller)
@@ -223,6 +271,8 @@ public class EnemyChase : MonoBehaviour
         spawnStateInitialized = true;
         isInAttackState = false;
         nextAttackAudioTime = 0f;
+        bulletHitCount = 0;
+        countedBulletInstanceIds?.Clear();
 
         if (animator != null)
         {
@@ -330,5 +380,66 @@ public class EnemyChase : MonoBehaviour
                 source.PlayOneShot(clip);
             }
         }
+    }
+
+    private bool IsQualifyingBullet(GameObject other)
+    {
+        if (other == null)
+        {
+            return false;
+        }
+
+        // Tag filter (optional)
+        if (qualifyingBulletTags != null && qualifyingBulletTags.Length > 0)
+        {
+            for (int i = 0; i < qualifyingBulletTags.Length; i++)
+            {
+                var tag = qualifyingBulletTags[i];
+                if (!string.IsNullOrEmpty(tag) && other.CompareTag(tag))
+                {
+                    return true;
+                }
+            }
+        }
+
+        // Prefab-name filter (optional)
+        if (qualifyingBulletPrefabs != null && qualifyingBulletPrefabs.Length > 0)
+        {
+            string otherName = other.name;
+            string rootName = other.transform != null && other.transform.root != null ? other.transform.root.name : null;
+
+            for (int i = 0; i < qualifyingBulletPrefabs.Length; i++)
+            {
+                var prefab = qualifyingBulletPrefabs[i];
+                if (prefab == null) continue;
+                string prefabName = prefab.name;
+                if (NamesMatch(otherName, prefabName) || (!string.IsNullOrEmpty(rootName) && NamesMatch(rootName, prefabName)))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // If no filters specified, treat any collision as qualifying in bullet-hit mode
+        return true;
+    }
+
+    private static bool NamesMatch(string instanceName, string prefabName)
+    {
+        if (string.IsNullOrEmpty(instanceName) || string.IsNullOrEmpty(prefabName))
+        {
+            return false;
+        }
+        if (instanceName == prefabName)
+        {
+            return true;
+        }
+        // Common case for instantiated prefabs: "Name(Clone)"
+        if (instanceName.StartsWith(prefabName) && instanceName.Contains("(Clone)"))
+        {
+            return true;
+        }
+        return false;
     }
 }
