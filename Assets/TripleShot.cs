@@ -34,6 +34,14 @@ public class TripleShoot : MonoBehaviour
     private bool leftHandHolding;
     private bool rightHandHolding;
 
+    [Header("Haptic feedback")]
+    [SerializeField, Range(0f, 1f)] private float hapticAmplitude = 0.75f;
+    [SerializeField, Range(0f, 1f)] private float hapticFrequency = 0.35f;
+    [SerializeField, Min(0f)] private float hapticDuration = 0.1f;
+
+    private Coroutine hapticsRoutine;
+    private OVRInput.Controller hapticsController = OVRInput.Controller.None;
+
     void Awake()
     {
         grabbable = GetComponent<Grabbable>();
@@ -53,6 +61,7 @@ public class TripleShoot : MonoBehaviour
         if (grabbable != null)
             grabbable.WhenPointerEventRaised -= HandlePointerEvent;
         StopCurrentBurst();
+        StopHapticsRoutine();
         LogHold("OnDisable", holdingController, "unsubscribed from pointer events");
     }
 
@@ -264,6 +273,7 @@ public class TripleShoot : MonoBehaviour
         for (int i = 0; i < shots; i++)
         {
             FireSingleShot();
+            TriggerHapticPulse(holdingController);
 
             if (i < shots - 1)
             {
@@ -300,6 +310,38 @@ public class TripleShoot : MonoBehaviour
         {
             StopCoroutine(burstRoutine);
             burstRoutine = null;
+        }
+    }
+
+    private void TriggerHapticPulse(OVRInput.Controller controller)
+    {
+        if (controller == OVRInput.Controller.None)
+            return;
+
+        StopHapticsRoutine();
+        hapticsController = controller;
+        hapticsRoutine = StartCoroutine(HapticsBurst());
+    }
+
+    private IEnumerator HapticsBurst()
+    {
+        OVRInput.SetControllerVibration(hapticFrequency, hapticAmplitude, hapticsController);
+        yield return new WaitForSeconds(hapticDuration);
+        StopHapticsRoutine();
+    }
+
+    private void StopHapticsRoutine()
+    {
+        if (hapticsRoutine != null)
+        {
+            StopCoroutine(hapticsRoutine);
+            hapticsRoutine = null;
+        }
+
+        if (hapticsController != OVRInput.Controller.None)
+        {
+            OVRInput.SetControllerVibration(0f, 0f, hapticsController);
+            hapticsController = OVRInput.Controller.None;
         }
     }
 

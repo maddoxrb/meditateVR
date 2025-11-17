@@ -6,6 +6,8 @@ public class EnemySpawner : MonoBehaviour
 {
     [Header("Enemy Settings")]
     public GameObject enemyPrefab;
+    [Tooltip("Optional set of prefab variants. When populated, the spawner randomly selects one of these per spawn. Entries left empty are ignored.")]
+    public GameObject[] enemyPrefabs;
     public int maxEnemies = 10;
 
     [Header("Spawn Settings")]
@@ -57,6 +59,15 @@ public class EnemySpawner : MonoBehaviour
     public float defaultWaveCanvasDisplayDuration = 2f;
     [Tooltip("Seconds to blend the wave canvas alpha from 1 back down to 0.")]
     public float waveCanvasFadeOutDuration = 0.5f;
+    [Header("Activation")]
+    [Tooltip("If enabled, spawning begins automatically in Start(). Otherwise call StartSpawning() manually (e.g., from a UI Button).")]
+    [SerializeField] private bool autoStart = true;
+
+    [Header("Audio")]
+    [Tooltip("Optional audio source to play when a wave begins.")]
+    [SerializeField] private AudioSource roundStartAudioSource;
+    [Tooltip("Clip used for the round start audio. Leave empty to use the audio source's assigned clip.")]
+    [SerializeField] private AudioClip roundStartClip;
 
     private readonly Dictionary<EnemyChase, EnemyState> enemyStates = new Dictionary<EnemyChase, EnemyState>();
     private Coroutine mainRoutine;
@@ -69,6 +80,8 @@ public class EnemySpawner : MonoBehaviour
     private GameObject activeWaveCanvas;
     private CanvasGroup activeWaveCanvasGroup;
     private Coroutine activeCanvasRoutine;
+    private bool initializationAttempted;
+    private bool initializationSucceeded;
 
     private class EnemyState
     {
@@ -83,27 +96,29 @@ public class EnemySpawner : MonoBehaviour
 
     private void Start()
     {
-        if (enemyPrefab == null)
+        if (autoStart)
         {
-            Debug.LogWarning($"{nameof(EnemySpawner)} on {name} has no enemy prefab assigned.", this);
+            StartSpawning();
+        }
+    }
+
+    public void StartSpawning()
+    {
+        if (!isActiveAndEnabled)
+        {
+            Debug.LogWarning($"{nameof(EnemySpawner)} on {name} cannot start spawning while disabled.", this);
             return;
         }
 
-        if (spawnPoints == null || spawnPoints.Length == 0)
+        if (!EnsureInitialized())
         {
-            Debug.LogWarning($"{nameof(EnemySpawner)} on {name} has no spawn points configured.", this);
             return;
         }
 
-        useWaveMode = HasWaveConfiguration();
-
-        if (useWaveMode && lifecycle.respawnOnKill)
+        if (mainRoutine == null)
         {
-            Debug.LogWarning($"{nameof(EnemySpawner)} on {name} is running in wave mode, which ignores respawnOnKill. Disabling respawns for waves.", this);
-            lifecycle.respawnOnKill = false;
+            mainRoutine = StartCoroutine(useWaveMode ? RunWaveMode() : SpawnLoopMode());
         }
-
-        mainRoutine = StartCoroutine(useWaveMode ? RunWaveMode() : SpawnLoopMode());
     }
 
     private bool HasWaveConfiguration()
@@ -150,6 +165,9 @@ public class EnemySpawner : MonoBehaviour
         currentWaveTargetCount = 0;
         StopActiveCanvasRoutine();
         HideActiveWaveCanvasImmediate();
+        initializationAttempted = false;
+        initializationSucceeded = false;
+        useWaveMode = false;
     }
 
     private void HideAllWaveCanvasesAtStartup()
@@ -208,6 +226,13 @@ public class EnemySpawner : MonoBehaviour
             spawnedThisWave = 0;
             defeatedThisWave = 0;
 
+            float preSpawnDelay = waveIndex == 0 ? Mathf.Max(0f, initialWaveDelay) : Mathf.Max(0f, betweenWaveDelay);
+            if (preSpawnDelay > 0f)
+            {
+                yield return new WaitForSeconds(preSpawnDelay);
+            }
+            PlayRoundStartAudio();
+
             StopActiveCanvasRoutine();
             HideActiveWaveCanvasImmediate();
             if (wave.waveCanvas != null)
@@ -218,12 +243,6 @@ public class EnemySpawner : MonoBehaviour
                     yield return activeCanvasRoutine;
                     activeCanvasRoutine = null;
                 }
-            }
-
-            float preSpawnDelay = waveIndex == 0 ? Mathf.Max(0f, initialWaveDelay) : Mathf.Max(0f, betweenWaveDelay);
-            if (preSpawnDelay > 0f)
-            {
-                yield return new WaitForSeconds(preSpawnDelay);
             }
 
             while (defeatedThisWave < currentWaveTargetCount)
@@ -397,7 +416,14 @@ public class EnemySpawner : MonoBehaviour
             return false;
         }
 
-        GameObject newEnemy = Instantiate(enemyPrefab, spawnPoint.position, spawnPoint.rotation);
+        GameObject prefab = GetEnemyPrefabForSpawn();
+        if (prefab == null)
+        {
+            Debug.LogWarning($"{nameof(EnemySpawner)} on {name} skipped spawning because all configured prefabs are missing.", this);
+            return false;
+        }
+
+        GameObject newEnemy = Instantiate(prefab, spawnPoint.position, spawnPoint.rotation);
         currentEnemies++;
 
         EnemyChase chase = newEnemy.GetComponent<EnemyChase>();
@@ -444,11 +470,123 @@ public class EnemySpawner : MonoBehaviour
         return Random.Range(min, max);
     }
 
+    private bool HasAnyEnemyPrefab()
+    {
+        if (enemyPrefab != null)
+        {
+            return true;
+        }
+
+        if (enemyPrefabs != null)
+        {
+            for (int i = 0; i < enemyPrefabs.Length; i++)
+            {
+                if (enemyPrefabs[i] != null)
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private GameObject GetEnemyPrefabForSpawn()
+    {
+        if (enemyPrefabs != null && enemyPrefabs.Length > 0)
+        {
+            // Try a few random attempts first to increase variety.
+            int attempts = Mathf.Min(enemyPrefabs.Length, 5);
+            for (int i = 0; i < attempts; i++)
+            {
+                int index = Random.Range(0, enemyPrefabs.Length);
+                GameObject variant = enemyPrefabs[index];
+                if (variant != null)
+                {
+                    return variant;
+                }
+            }
+
+            // Fallback to the first non-null entry if the random attempts hit empty slots.
+            for (int i = 0; i < enemyPrefabs.Length; i++)
+            {
+                if (enemyPrefabs[i] != null)
+                {
+                    return enemyPrefabs[i];
+                }
+            }
+        }
+
+        return enemyPrefab;
+    }
+
+    private void PlayRoundStartAudio()
+    {
+        if (roundStartAudioSource == null && roundStartClip == null)
+        {
+            return;
+        }
+
+        AudioSource source = roundStartAudioSource;
+        if (source == null)
+        {
+            source = GetComponent<AudioSource>();
+        }
+
+        if (source == null)
+        {
+            return;
+        }
+
+        AudioClip clip = roundStartClip != null ? roundStartClip : source.clip;
+        if (clip == null)
+        {
+            return;
+        }
+
+        source.PlayOneShot(clip);
+    }
+
     private float GetWaveSpawnDelay(WaveSettings wave)
     {
         float min = Mathf.Min(wave.spawnIntervalMin, wave.spawnIntervalMax);
         float max = Mathf.Max(wave.spawnIntervalMin, wave.spawnIntervalMax);
         return Random.Range(min, max);
+    }
+
+    private bool EnsureInitialized()
+    {
+        if (initializationAttempted)
+        {
+            return initializationSucceeded;
+        }
+
+        initializationAttempted = true;
+
+        if (!HasAnyEnemyPrefab())
+        {
+            Debug.LogWarning($"{nameof(EnemySpawner)} on {name} has no enemy prefabs assigned.", this);
+            initializationSucceeded = false;
+            return false;
+        }
+
+        if (spawnPoints == null || spawnPoints.Length == 0)
+        {
+            Debug.LogWarning($"{nameof(EnemySpawner)} on {name} has no spawn points configured.", this);
+            initializationSucceeded = false;
+            return false;
+        }
+
+        useWaveMode = HasWaveConfiguration();
+
+        if (useWaveMode && lifecycle.respawnOnKill)
+        {
+            Debug.LogWarning($"{nameof(EnemySpawner)} on {name} is running in wave mode, which ignores respawnOnKill. Disabling respawns for waves.", this);
+            lifecycle.respawnOnKill = false;
+        }
+
+        initializationSucceeded = true;
+        return true;
     }
 
     internal void HandleEnemyKilled(EnemyChase enemy)

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using System.Collections;
 
 public class PlayerHealth : MonoBehaviour
 {
@@ -40,6 +41,16 @@ public class PlayerHealth : MonoBehaviour
     [Range(0f,1f)]
     [SerializeField] private float damageClipVolume = 1f;
 
+    [Header("Haptics")]
+    [Tooltip("Amplitude of the damage haptic pulse (0-1).")]
+    [SerializeField, Range(0f, 1f)] private float damageHapticAmplitude = 0.8f;
+    [Tooltip("Frequency of the damage haptic pulse (0-1).")]
+    [SerializeField, Range(0f, 1f)] private float damageHapticFrequency = 0.4f;
+    [Tooltip("Duration of each pulse in seconds.")]
+    [SerializeField, Min(0f)] private float damageHapticPulseDuration = 0.12f;
+    [Tooltip("Delay between pulses in the double burst (seconds).")]
+    [SerializeField, Min(0f)] private float damageHapticPulseGap = 0.05f;
+
     public event Action<int, int> OnDamaged;
     public event Action OnDeath;
 
@@ -54,6 +65,7 @@ public class PlayerHealth : MonoBehaviour
     private bool isNearEnemy;
     private Transform autoDetectedCenter;
     private float nextAutoCenterSearchTime;
+    private Coroutine damageHapticsRoutine;
 
     private void Awake()
     {
@@ -63,6 +75,11 @@ public class PlayerHealth : MonoBehaviour
         nearbyEnemyRoots = new HashSet<Transform>();
         autoDetectedCenter = null;
         nextAutoCenterSearchTime = 0f;
+    }
+
+    private void OnDisable()
+    {
+        StopDamageHaptics();
     }
 
     private void OnValidate()
@@ -213,6 +230,7 @@ public class PlayerHealth : MonoBehaviour
             int heartsLostThisHit = previousHearts - currentHearts;
             OnDamaged?.Invoke(currentHearts, heartsLostThisHit);
             PlayDamageAudio();
+            TriggerDamageHaptics();
 
             if (currentHearts == 0)
             {
@@ -243,6 +261,54 @@ public class PlayerHealth : MonoBehaviour
         }
 
         src.PlayOneShot(damageClip, damageClipVolume);
+    }
+
+    private void TriggerDamageHaptics()
+    {
+        if (damageHapticPulseDuration <= 0f)
+            return;
+
+        StopDamageHaptics();
+        damageHapticsRoutine = StartCoroutine(DamageHapticRoutine());
+    }
+
+    private IEnumerator DamageHapticRoutine()
+    {
+        float pulseDuration = Mathf.Max(0f, damageHapticPulseDuration);
+        float gapDuration = Mathf.Max(0f, damageHapticPulseGap);
+
+        yield return PlayHapticBurst();
+        if (gapDuration > 0f)
+        {
+            yield return new WaitForSeconds(gapDuration);
+        }
+        yield return PlayHapticBurst();
+        damageHapticsRoutine = null;
+    }
+
+    private IEnumerator PlayHapticBurst()
+    {
+        float amplitude = Mathf.Clamp01(damageHapticAmplitude);
+        float frequency = Mathf.Clamp01(damageHapticFrequency);
+        float duration = Mathf.Max(0f, damageHapticPulseDuration);
+
+        OVRInput.SetControllerVibration(frequency, amplitude, OVRInput.Controller.LTouch);
+        OVRInput.SetControllerVibration(frequency, amplitude, OVRInput.Controller.RTouch);
+        yield return new WaitForSeconds(duration);
+        OVRInput.SetControllerVibration(0f, 0f, OVRInput.Controller.LTouch);
+        OVRInput.SetControllerVibration(0f, 0f, OVRInput.Controller.RTouch);
+    }
+
+    private void StopDamageHaptics()
+    {
+        if (damageHapticsRoutine != null)
+        {
+            StopCoroutine(damageHapticsRoutine);
+            damageHapticsRoutine = null;
+        }
+
+        OVRInput.SetControllerVibration(0f, 0f, OVRInput.Controller.LTouch);
+        OVRInput.SetControllerVibration(0f, 0f, OVRInput.Controller.RTouch);
     }
 
     private Transform GetDetectionCenterRuntime()
