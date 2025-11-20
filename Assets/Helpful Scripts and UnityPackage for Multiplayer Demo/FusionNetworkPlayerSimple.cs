@@ -19,9 +19,9 @@ public class FusionNetworkPlayerSimple : NetworkBehaviour
         if (HasInputAuthority)
         {
             // Map XR rig references
-            headRig = GameObject.Find("[BuildingBlock] Camera Rig/TrackingSpace/CenterEyeAnchor").transform;
-            leftHandRig = GameObject.Find("[BuildingBlock] Camera Rig/TrackingSpace/LeftHandAnchor/LeftControllerAnchor").transform;
-            rightHandRig = GameObject.Find("[BuildingBlock] Camera Rig/TrackingSpace/RightHandAnchor/RightControllerAnchor").transform;
+            headRig = GameObject.Find("Player/OVRCameraRig/TrackingSpace/CenterEyeAnchor").transform;
+            leftHandRig = GameObject.Find("Player/OVRCameraRig/TrackingSpace/LeftHandAnchor/LeftControllerAnchor").transform;
+            rightHandRig = GameObject.Find("Player/OVRCameraRig/TrackingSpace/RightHandAnchor/RightControllerAnchor").transform;
 
             // --- Hide all renderers on head, hands, and neck for the local player ---
             DisableAllRenderers(head);
