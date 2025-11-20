@@ -57,6 +57,10 @@ public class EnemyChase : MonoBehaviour
     private float nextAttackAudioTime;
     private int bulletHitCount;
     private HashSet<int> countedBulletInstanceIds;
+    [Header("Multiplayer Targeting")]
+    [Tooltip("How often (seconds) to refresh the closest player target.")]
+    [SerializeField] private float targetRefreshInterval = 0.5f;
+    private float nextTargetSearchTime;
 
     void Start()
     {
@@ -73,6 +77,12 @@ public class EnemyChase : MonoBehaviour
         if (isKilled)
         {
             return;
+        }
+
+        if (Time.time >= nextTargetSearchTime || player == null || !player.gameObject.activeInHierarchy)
+        {
+            player = FindNearestPlayer();
+            nextTargetSearchTime = Time.time + Mathf.Max(0.05f, targetRefreshInterval);
         }
 
         if (player != null && agent != null)
@@ -244,11 +254,7 @@ public class EnemyChase : MonoBehaviour
 
         if (player == null)
         {
-            GameObject playerObj = GameObject.FindGameObjectWithTag("Player");
-            if (playerObj != null)
-            {
-                player = playerObj.transform;
-            }
+            player = FindNearestPlayer();
         }
 
         spawnPosition = position;
@@ -322,11 +328,7 @@ public class EnemyChase : MonoBehaviour
             return;
         }
 
-        GameObject playerObj = GameObject.FindGameObjectWithTag("Player");
-        if (playerObj != null)
-        {
-            player = playerObj.transform;
-        }
+        player = FindNearestPlayer();
 
         agent = GetComponent<NavMeshAgent>();
         if (agent != null)
@@ -441,5 +443,37 @@ public class EnemyChase : MonoBehaviour
             return true;
         }
         return false;
+    }
+
+    private Transform FindNearestPlayer()
+    {
+        GameObject[] players = GameObject.FindGameObjectsWithTag("Player");
+        if (players == null || players.Length == 0)
+        {
+            return null;
+        }
+
+        Transform closest = null;
+        float closestSqrDist = float.PositiveInfinity;
+        Vector3 myPos = transform.position;
+
+        for (int i = 0; i < players.Length; i++)
+        {
+            var go = players[i];
+            if (go == null || !go.activeInHierarchy)
+            {
+                continue;
+            }
+
+            var t = go.transform;
+            float sqrDist = (t.position - myPos).sqrMagnitude;
+            if (sqrDist < closestSqrDist)
+            {
+                closestSqrDist = sqrDist;
+                closest = t;
+            }
+        }
+
+        return closest;
     }
 }

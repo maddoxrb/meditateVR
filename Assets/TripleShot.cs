@@ -17,6 +17,10 @@ public class TripleShoot : MonoBehaviour
     private Grabbable grabbable;
     private AudioSource audioSource;
 
+    [Header("Cooldown")]
+    [SerializeField, Min(0f)] private float fireCooldown = 0.9f;
+    private float nextFireTime = 0f;
+
     [Header("Burst Fire")]
     [SerializeField, Min(1)]
     private int burstShotCount = 3;
@@ -269,8 +273,10 @@ public class TripleShoot : MonoBehaviour
                       OVRInput.GetDown(shootButton, OVRInput.Controller.RTouch);
         }
 
-        if (pressed && burstRoutine == null)
+        if (pressed && burstRoutine == null && Time.time >= nextFireTime)
         {
+            nextFireTime = Time.time + fireCooldown; // lock out until cooldown expires
+
             string controllerList = "none";
             if (activeControllers.Count > 0)
             {
