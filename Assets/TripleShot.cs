@@ -40,7 +40,7 @@ public class TripleShoot : MonoBehaviour
     [SerializeField, Min(0f)] private float hapticDuration = 0.1f;
 
     private Coroutine hapticsRoutine;
-    private OVRInput.Controller hapticsController = OVRInput.Controller.None;
+    private readonly List<OVRInput.Controller> activeHapticsControllers = new List<OVRInput.Controller>(2);
 
     void Awake()
     {
@@ -229,6 +229,20 @@ public class TripleShoot : MonoBehaviour
         return OVRInput.Controller.None;
     }
 
+    private List<OVRInput.Controller> GatherActiveControllers()
+    {
+        var controllers = new List<OVRInput.Controller>(2);
+        AddControllerIfValid(controllers, leftHandHolding ? OVRInput.Controller.LTouch : OVRInput.Controller.None);
+        AddControllerIfValid(controllers, rightHandHolding ? OVRInput.Controller.RTouch : OVRInput.Controller.None);
+
+        if (controllers.Count == 0)
+        {
+            AddControllerIfValid(controllers, holdingController);
+        }
+
+        return controllers;
+    }
+
     void Update()
     {
         if (!isHeld)
@@ -238,42 +252,49 @@ public class TripleShoot : MonoBehaviour
         }
 
         bool pressed = false;
-        bool anySpecificHand = leftHandHolding || rightHandHolding;
+        var activeControllers = GatherActiveControllers();
 
-        if (leftHandHolding)
-            pressed |= OVRInput.GetDown(shootButton, OVRInput.Controller.LTouch);
-
-        if (rightHandHolding)
-            pressed |= OVRInput.GetDown(shootButton, OVRInput.Controller.RTouch);
-
-        if (!anySpecificHand)
+        foreach (var controller in activeControllers)
         {
-            if (holdingController != OVRInput.Controller.None)
+            if (OVRInput.GetDown(shootButton, controller))
             {
-                pressed |= OVRInput.GetDown(shootButton, holdingController);
+                pressed = true;
+                break;
             }
-            else
-            {
-                pressed |= OVRInput.GetDown(shootButton, OVRInput.Controller.LTouch) ||
-                           OVRInput.GetDown(shootButton, OVRInput.Controller.RTouch);
-            }
+        }
+
+        if (!pressed && activeControllers.Count == 0)
+        {
+            pressed = OVRInput.GetDown(shootButton, OVRInput.Controller.LTouch) ||
+                      OVRInput.GetDown(shootButton, OVRInput.Controller.RTouch);
         }
 
         if (pressed && burstRoutine == null)
         {
-            LogHold("Update.Fire", holdingController, $"button={shootButton}, interactorName={holdingInteractorName}");
-            burstRoutine = StartCoroutine(FireBurst());
+            string controllerList = "none";
+            if (activeControllers.Count > 0)
+            {
+                var controllerNames = new List<string>(activeControllers.Count);
+                for (int i = 0; i < activeControllers.Count; i++)
+                {
+                    controllerNames.Add(activeControllers[i].ToString());
+                }
+                controllerList = string.Join(",", controllerNames);
+            }
+
+            LogHold("Update.Fire", holdingController, $"button={shootButton}, interactorName={holdingInteractorName}, controllers={controllerList}");
+            burstRoutine = StartCoroutine(FireBurst(activeControllers));
         }
     }
 
-    private IEnumerator FireBurst()
+    private IEnumerator FireBurst(IReadOnlyList<OVRInput.Controller> firingControllers)
     {
         int shots = Mathf.Max(1, burstShotCount);
 
         for (int i = 0; i < shots; i++)
         {
             FireSingleShot();
-            TriggerHapticPulse(holdingController);
+            TriggerHapticPulse(firingControllers);
 
             if (i < shots - 1)
             {
@@ -313,21 +334,42 @@ public class TripleShoot : MonoBehaviour
         }
     }
 
-    private void TriggerHapticPulse(OVRInput.Controller controller)
+    private void TriggerHapticPulse(IReadOnlyList<OVRInput.Controller> controllers)
     {
-        if (controller == OVRInput.Controller.None)
-            return;
-
         StopHapticsRoutine();
-        hapticsController = controller;
+        activeHapticsControllers.Clear();
+
+        if (controllers != null)
+        {
+            for (int i = 0; i < controllers.Count; i++)
+            {
+                AddControllerIfValid(activeHapticsControllers, controllers[i]);
+            }
+        }
+
+        if (activeHapticsControllers.Count == 0)
+        {
+            AddControllerIfValid(activeHapticsControllers, holdingController);
+        }
+
+        if (activeHapticsControllers.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var controller in activeHapticsControllers)
+        {
+            OVRInput.SetControllerVibration(hapticFrequency, hapticAmplitude, controller);
+        }
+
         hapticsRoutine = StartCoroutine(HapticsBurst());
     }
 
     private IEnumerator HapticsBurst()
     {
-        OVRInput.SetControllerVibration(hapticFrequency, hapticAmplitude, hapticsController);
         yield return new WaitForSeconds(hapticDuration);
-        StopHapticsRoutine();
+        hapticsRoutine = null;
+        ResetHapticsControllers();
     }
 
     private void StopHapticsRoutine()
@@ -338,11 +380,22 @@ public class TripleShoot : MonoBehaviour
             hapticsRoutine = null;
         }
 
-        if (hapticsController != OVRInput.Controller.None)
+        ResetHapticsControllers();
+    }
+
+    private void ResetHapticsControllers()
+    {
+        if (activeHapticsControllers.Count == 0)
         {
-            OVRInput.SetControllerVibration(0f, 0f, hapticsController);
-            hapticsController = OVRInput.Controller.None;
+            return;
         }
+
+        foreach (var controller in activeHapticsControllers)
+        {
+            OVRInput.SetControllerVibration(0f, 0f, controller);
+        }
+
+        activeHapticsControllers.Clear();
     }
 
     // crude mapping: left = LTouch, right = RTouch
@@ -470,6 +523,19 @@ public class TripleShoot : MonoBehaviour
             case OVRInput.Controller.LTouch: return "Left";
             case OVRInput.Controller.RTouch: return "Right";
             default: return "None";
+        }
+    }
+
+    private static void AddControllerIfValid(List<OVRInput.Controller> controllers, OVRInput.Controller controller)
+    {
+        if (controller == OVRInput.Controller.None)
+        {
+            return;
+        }
+
+        if (!controllers.Contains(controller))
+        {
+            controllers.Add(controller);
         }
     }
 

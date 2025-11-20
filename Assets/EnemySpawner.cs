@@ -231,7 +231,6 @@ public class EnemySpawner : MonoBehaviour
             {
                 yield return new WaitForSeconds(preSpawnDelay);
             }
-            PlayRoundStartAudio();
 
             StopActiveCanvasRoutine();
             HideActiveWaveCanvasImmediate();
@@ -244,6 +243,8 @@ public class EnemySpawner : MonoBehaviour
                     activeCanvasRoutine = null;
                 }
             }
+
+            PlayRoundStartAudio();
 
             while (defeatedThisWave < currentWaveTargetCount)
             {
