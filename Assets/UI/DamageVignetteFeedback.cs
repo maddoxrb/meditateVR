@@ -6,6 +6,8 @@ public class DamageVignetteFeedback : MonoBehaviour
     [Header("References")]
     [SerializeField] private PlayerHealth playerHealth;
     [SerializeField] private Image vignetteImage;
+    [Tooltip("Enemy spawner used to detect when a wave is cleared so death UI can hide and health can reset.")]
+    [SerializeField] private EnemySpawner enemySpawner;
 
     [Header("Flash Settings")]
     [Tooltip("Base alpha added for the first hit; subsequent hits are scaled exponentially.")]
@@ -20,6 +22,7 @@ public class DamageVignetteFeedback : MonoBehaviour
     [SerializeField] private Canvas deathCanvas;
 
     private float currentAlpha;
+    private bool waitingForWaveClear;
 
     private void Awake()
     {
@@ -47,6 +50,11 @@ public class DamageVignetteFeedback : MonoBehaviour
             playerHealth.OnDamaged += HandleDamaged;
             playerHealth.OnDeath += HandleDeath;
         }
+
+        if (enemySpawner != null)
+        {
+            enemySpawner.OnWaveCleared += HandleWaveCleared;
+        }
     }
 
     private void OnDisable()
@@ -55,6 +63,11 @@ public class DamageVignetteFeedback : MonoBehaviour
         {
             playerHealth.OnDamaged -= HandleDamaged;
             playerHealth.OnDeath -= HandleDeath;
+        }
+
+        if (enemySpawner != null)
+        {
+            enemySpawner.OnWaveCleared -= HandleWaveCleared;
         }
     }
 
@@ -84,6 +97,7 @@ public class DamageVignetteFeedback : MonoBehaviour
     {
         currentAlpha = maxAlpha;
         SetImageAlpha(currentAlpha);
+        waitingForWaveClear = true;
 
         if (deathCanvas != null)
         {
@@ -95,6 +109,36 @@ public class DamageVignetteFeedback : MonoBehaviour
         {
             mainCanvas.enabled = false;
             mainCanvas.gameObject.SetActive(false);
+        }
+    }
+
+    private void HandleWaveCleared(int waveIndex)
+    {
+        if (!waitingForWaveClear)
+        {
+            return;
+        }
+
+        waitingForWaveClear = false;
+
+        if (playerHealth != null)
+        {
+            playerHealth.ResetHealthToFull();
+        }
+
+        currentAlpha = 0f;
+        SetImageAlpha(currentAlpha);
+
+        if (deathCanvas != null)
+        {
+            deathCanvas.enabled = false;
+            deathCanvas.gameObject.SetActive(false);
+        }
+
+        if (mainCanvas != null)
+        {
+            mainCanvas.enabled = true;
+            mainCanvas.gameObject.SetActive(true);
         }
     }
 

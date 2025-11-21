@@ -34,6 +34,10 @@ public class EnemyChase : MonoBehaviour
     [Tooltip("If disabled, the same bullet instance will only ever count once even if it collides multiple times.")]
     [SerializeField] private bool countMultipleHitsFromSameInstance = true;
 
+    [Header("Targeting Overrides")]
+    [Tooltip("Additional object names the enemy should consider valid player targets (in addition to the Player tag).")]
+    [SerializeField] private string[] additionalTargetNames = { "PlayerModel(Clone)" };
+
     private Transform player;
     private NavMeshAgent agent;
     [SerializeField] private Animator animator; // assign in inspector if animator is on a child
@@ -107,16 +111,14 @@ public class EnemyChase : MonoBehaviour
                 Vector3 enemyFlat = new Vector3(transform.position.x, 0f, transform.position.z);
                 Vector3 playerFlat = new Vector3(player.position.x, 0f, player.position.z);
                 float distanceToPlayer = Vector3.Distance(enemyFlat, playerFlat);
-                Debug.Log("Distance to player: " + distanceToPlayer);
                 bool shouldAttack = distanceToPlayer <= attackDistance;
-                Debug.Log("Should Attack: " + shouldAttack);
+         
 
                 if (shouldAttack)
                 {
-                    Debug.Log("Chasing: " + animator.GetBool("isChasing"));
+            
                     animator.SetBool(IsChasingHash, false);
                     animator.SetBool(IsAttackingHash1, true);
-                    Debug.Log(animator.GetBool("isAttacking1"));
                     animator.SetBool(IsAttackingHash2, false);
                     if (!agent.isStopped)
                     {
@@ -447,30 +449,60 @@ public class EnemyChase : MonoBehaviour
 
     private Transform FindNearestPlayer()
     {
-        GameObject[] players = GameObject.FindGameObjectsWithTag("Player");
-        if (players == null || players.Length == 0)
-        {
-            return null;
-        }
-
+        Vector3 myPos = transform.position;
         Transform closest = null;
         float closestSqrDist = float.PositiveInfinity;
-        Vector3 myPos = transform.position;
 
-        for (int i = 0; i < players.Length; i++)
+        void Consider(GameObject candidate)
         {
-            var go = players[i];
-            if (go == null || !go.activeInHierarchy)
+            if (candidate == null || !candidate.activeInHierarchy)
             {
-                continue;
+                return;
             }
 
-            var t = go.transform;
+            Transform t = candidate.transform;
             float sqrDist = (t.position - myPos).sqrMagnitude;
             if (sqrDist < closestSqrDist)
             {
                 closestSqrDist = sqrDist;
                 closest = t;
+            }
+        }
+
+        GameObject[] players = GameObject.FindGameObjectsWithTag("Player");
+        if (players != null)
+        {
+            for (int i = 0; i < players.Length; i++)
+            {
+                Consider(players[i]);
+            }
+        }
+
+        if (closest != null)
+        {
+            return closest;
+        }
+
+        if (additionalTargetNames != null && additionalTargetNames.Length > 0)
+        {
+            Transform[] allTransforms = FindObjectsOfType<Transform>();
+            for (int i = 0; i < allTransforms.Length; i++)
+            {
+                Transform t = allTransforms[i];
+                string name = t != null ? t.name : null;
+                if (string.IsNullOrEmpty(name))
+                {
+                    continue;
+                }
+
+                for (int j = 0; j < additionalTargetNames.Length; j++)
+                {
+                    if (name == additionalTargetNames[j])
+                    {
+                        Consider(t.gameObject);
+                        break;
+                    }
+                }
             }
         }
 
