@@ -234,10 +234,18 @@ public class PlayerHealth : MonoBehaviour
 
             if (currentHearts == 0)
             {
-                Debug.Log("Player died");
                 OnDeath?.Invoke();
             }
         }
+    }
+
+    public void ResetHealthToFull()
+    {
+        StopDamageHaptics();
+        currentHearts = Mathf.Max(1, maxHearts);
+        isNearEnemy = false;
+        timeNearEnemy = 0f;
+        nearbyEnemyRoots.Clear();
     }
 
     private void OnDrawGizmosSelected()

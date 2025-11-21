@@ -26,10 +26,8 @@ public class testGrab : MonoBehaviour
         switch (evt.Type)
         {
             case PointerEventType.Select:
-                Debug.LogError("[GrabCheck] Grabbed!");
                 break;
             case PointerEventType.Unselect:
-                Debug.LogError("[GrabCheck] Released!");
                 break;
         }
     }

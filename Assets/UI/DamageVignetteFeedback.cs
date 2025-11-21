@@ -21,8 +21,15 @@ public class DamageVignetteFeedback : MonoBehaviour
     [SerializeField] private Canvas mainCanvas;
     [SerializeField] private Canvas deathCanvas;
 
+    [Header("Wave Clear Detection")]
+    [Tooltip("If true, will poll the scene for remaining enemies when the player is dead. This is useful on non-host clients where the spawner may not issue wave events.")]
+    [SerializeField] private bool useLocalEnemyPollFallback = true;
+    [Tooltip("Seconds between enemy polls while dead.")]
+    [SerializeField] private float enemyPollInterval = 0.35f;
+
     private float currentAlpha;
     private bool waitingForWaveClear;
+    private float nextEnemyPollTime;
 
     private void Awake()
     {
@@ -98,6 +105,7 @@ public class DamageVignetteFeedback : MonoBehaviour
         currentAlpha = maxAlpha;
         SetImageAlpha(currentAlpha);
         waitingForWaveClear = true;
+        nextEnemyPollTime = Time.time + Mathf.Max(0f, enemyPollInterval * 0.5f);
 
         if (deathCanvas != null)
         {
@@ -114,20 +122,36 @@ public class DamageVignetteFeedback : MonoBehaviour
 
     private void HandleWaveCleared(int waveIndex)
     {
+        TryHandleWaveClear();
+    }
+
+    private void Update()
+    {
+        if (!waitingForWaveClear || !useLocalEnemyPollFallback)
+        {
+            return;
+        }
+
+        if (Time.time < nextEnemyPollTime)
+        {
+            return;
+        }
+
+        nextEnemyPollTime = Time.time + Mathf.Max(0.05f, enemyPollInterval);
+        if (!AnyAliveEnemies())
+        {
+            TryHandleWaveClear();
+        }
+    }
+
+    private void TryHandleWaveClear()
+    {
         if (!waitingForWaveClear)
         {
             return;
         }
 
         waitingForWaveClear = false;
-
-        if (playerHealth != null)
-        {
-            playerHealth.ResetHealthToFull();
-        }
-
-        currentAlpha = 0f;
-        SetImageAlpha(currentAlpha);
 
         if (deathCanvas != null)
         {
@@ -140,6 +164,14 @@ public class DamageVignetteFeedback : MonoBehaviour
             mainCanvas.enabled = true;
             mainCanvas.gameObject.SetActive(true);
         }
+
+        if (playerHealth != null)
+        {
+            playerHealth.ResetHealthToFull();
+        }
+
+        currentAlpha = 0f;
+        SetImageAlpha(currentAlpha);
     }
 
     private void SetImageAlpha(float alpha)
@@ -150,5 +182,25 @@ public class DamageVignetteFeedback : MonoBehaviour
         Color color = vignetteImage.color;
         color.a = Mathf.Clamp01(alpha);
         vignetteImage.color = color;
+    }
+
+    private bool AnyAliveEnemies()
+    {
+        var enemies = FindObjectsOfType<EnemyChase>();
+        if (enemies == null || enemies.Length == 0)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < enemies.Length; i++)
+        {
+            EnemyChase enemy = enemies[i];
+            if (enemy != null && enemy.isActiveAndEnabled && !enemy.IsKilled)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

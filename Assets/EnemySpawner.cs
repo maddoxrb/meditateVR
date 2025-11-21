@@ -1,6 +1,9 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using Fusion;
+using Random = UnityEngine.Random;
 
 public class EnemySpawner : MonoBehaviour
 {
@@ -69,6 +72,8 @@ public class EnemySpawner : MonoBehaviour
     [Tooltip("Clip used for the round start audio. Leave empty to use the audio source's assigned clip.")]
     [SerializeField] private AudioClip roundStartClip;
 
+    public event Action<int> OnWaveCleared;
+
     private readonly Dictionary<EnemyChase, EnemyState> enemyStates = new Dictionary<EnemyChase, EnemyState>();
     private Coroutine mainRoutine;
     private int currentEnemies;
@@ -82,6 +87,8 @@ public class EnemySpawner : MonoBehaviour
     private Coroutine activeCanvasRoutine;
     private bool initializationAttempted;
     private bool initializationSucceeded;
+    private NetworkRunner cachedRunner;
+    private bool warnedMissingRunner;
 
     private class EnemyState
     {
@@ -202,6 +209,11 @@ public class EnemySpawner : MonoBehaviour
                 yield break;
             }
 
+            if (!CanSpawnEnemies())
+            {
+                continue;
+            }
+
             if (currentEnemies >= maxEnemies)
             {
                 continue;
@@ -248,6 +260,12 @@ public class EnemySpawner : MonoBehaviour
 
             while (defeatedThisWave < currentWaveTargetCount)
             {
+                if (!CanSpawnEnemies())
+                {
+                    yield return null;
+                    continue;
+                }
+
                 if (spawnedThisWave < currentWaveTargetCount && currentEnemies < maxEnemies)
                 {
                     if (TrySpawnEnemy())
@@ -275,6 +293,7 @@ public class EnemySpawner : MonoBehaviour
                 }
             }
 
+            OnWaveCleared?.Invoke(waveIndex);
             HideActiveWaveCanvasImmediate();
         }
 
@@ -424,9 +443,48 @@ public class EnemySpawner : MonoBehaviour
             return false;
         }
 
-        GameObject newEnemy = Instantiate(prefab, spawnPoint.position, spawnPoint.rotation);
-        currentEnemies++;
+        GameObject newEnemy = SpawnEnemyInstance(prefab, spawnPoint.position, spawnPoint.rotation);
+        if (newEnemy == null)
+        {
+            return false;
+        }
 
+        currentEnemies++;
+        RegisterSpawnedEnemy(newEnemy, spawnPoint);
+        return true;
+    }
+
+    private GameObject SpawnEnemyInstance(GameObject prefab, Vector3 position, Quaternion rotation)
+    {
+        NetworkObject networkPrefab = prefab.GetComponent<NetworkObject>();
+        if (networkPrefab != null)
+        {
+            NetworkRunner runner = GetActiveRunner();
+            if (runner == null)
+            {
+                if (!warnedMissingRunner)
+                {
+                    Debug.LogWarning($"{nameof(EnemySpawner)} on {name} is configured with network enemies but no active {nameof(NetworkRunner)} was found. Waiting until a runner starts before spawning.", this);
+                    warnedMissingRunner = true;
+                }
+                return null;
+            }
+
+            if (!HasSpawnAuthority(runner))
+            {
+                return null;
+            }
+
+            warnedMissingRunner = false;
+            NetworkObject spawned = runner.Spawn(networkPrefab, position, rotation);
+            return spawned != null ? spawned.gameObject : null;
+        }
+
+        return Instantiate(prefab, position, rotation);
+    }
+
+    private void RegisterSpawnedEnemy(GameObject newEnemy, Transform spawnPoint)
+    {
         EnemyChase chase = newEnemy.GetComponent<EnemyChase>();
         if (chase != null)
         {
@@ -449,8 +507,69 @@ public class EnemySpawner : MonoBehaviour
             }
             tracker.Init(this);
         }
+    }
 
-        return true;
+    private NetworkRunner GetActiveRunner()
+    {
+        if (cachedRunner != null && cachedRunner.IsRunning)
+        {
+            return cachedRunner;
+        }
+
+        NetworkRunner runnerInScene = NetworkRunner.GetRunnerForScene(gameObject.scene);
+        if (runnerInScene != null && runnerInScene.IsRunning)
+        {
+            cachedRunner = runnerInScene;
+            return cachedRunner;
+        }
+
+        var found = FindObjectOfType<NetworkRunner>();
+        if (found != null && found.IsRunning)
+        {
+            cachedRunner = found;
+            return cachedRunner;
+        }
+
+        return null;
+    }
+
+    private bool HasSpawnAuthority(NetworkRunner runner)
+    {
+        return runner != null && (runner.IsServer || runner.IsSharedModeMasterClient);
+    }
+
+    private bool CanSpawnEnemies()
+    {
+        NetworkRunner runner = GetActiveRunner();
+        if (runner == null)
+        {
+            // If any configured prefab is networked, wait for a runner before spawning.
+            return !HasNetworkedEnemyPrefabs();
+        }
+
+        return HasSpawnAuthority(runner);
+    }
+
+    private bool HasNetworkedEnemyPrefabs()
+    {
+        if (enemyPrefab != null && enemyPrefab.GetComponent<NetworkObject>() != null)
+        {
+            return true;
+        }
+
+        if (enemyPrefabs != null)
+        {
+            for (int i = 0; i < enemyPrefabs.Length; i++)
+            {
+                var candidate = enemyPrefabs[i];
+                if (candidate != null && candidate.GetComponent<NetworkObject>() != null)
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     private Transform GetSpawnPoint()
@@ -620,7 +739,7 @@ public class EnemySpawner : MonoBehaviour
             bool removed = RemoveEnemy(enemy, countForWave: true);
             if (removed && lifecycle.destroyOnKill)
             {
-                Destroy(enemy.gameObject);
+                DespawnOrDestroy(enemy);
             }
         }
         else
@@ -641,7 +760,7 @@ public class EnemySpawner : MonoBehaviour
                 bool removed = RemoveEnemy(enemy, countForWave: false);
                 if (removed && lifecycle.destroyOnKill)
                 {
-                    Destroy(enemy.gameObject);
+                    DespawnOrDestroy(enemy);
                 }
             }
         }
@@ -686,6 +805,33 @@ public class EnemySpawner : MonoBehaviour
         {
             defeatedThisWave = Mathf.Min(defeatedThisWave + 1, currentWaveTargetCount);
         }
+    }
+
+    private void DespawnOrDestroy(EnemyChase enemy)
+    {
+        if (enemy == null)
+        {
+            return;
+        }
+
+        GameObject target = enemy.gameObject;
+        NetworkObject networkObject = target.GetComponent<NetworkObject>();
+        if (networkObject != null)
+        {
+            NetworkRunner runner = networkObject.Runner != null && networkObject.Runner.IsRunning
+                ? networkObject.Runner
+                : GetActiveRunner();
+            if (runner != null && HasSpawnAuthority(runner))
+            {
+                runner.Despawn(networkObject);
+                return;
+            }
+
+            // Do not locally destroy a networked object if we do not own it.
+            return;
+        }
+
+        Destroy(target);
     }
 
     private class SpawnedEnemyTracker : MonoBehaviour

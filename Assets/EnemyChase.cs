@@ -37,6 +37,7 @@ public class EnemyChase : MonoBehaviour
     [Header("Targeting Overrides")]
     [Tooltip("Additional object names the enemy should consider valid player targets (in addition to the Player tag).")]
     [SerializeField] private string[] additionalTargetNames = { "PlayerModel(Clone)" };
+    private static readonly string[] DefaultTargetNames = { "PlayerModel", "PlayerModel(Clone)", "Player", "Player(Clone)" };
 
     private Transform player;
     private NavMeshAgent agent;
@@ -453,19 +454,18 @@ public class EnemyChase : MonoBehaviour
         Transform closest = null;
         float closestSqrDist = float.PositiveInfinity;
 
-        void Consider(GameObject candidate)
+        void Consider(Transform candidate)
         {
-            if (candidate == null || !candidate.activeInHierarchy)
+            if (candidate == null || candidate.gameObject == null || !candidate.gameObject.activeInHierarchy)
             {
                 return;
             }
 
-            Transform t = candidate.transform;
-            float sqrDist = (t.position - myPos).sqrMagnitude;
+            float sqrDist = (candidate.position - myPos).sqrMagnitude;
             if (sqrDist < closestSqrDist)
             {
                 closestSqrDist = sqrDist;
-                closest = t;
+                closest = candidate;
             }
         }
 
@@ -474,18 +474,18 @@ public class EnemyChase : MonoBehaviour
         {
             for (int i = 0; i < players.Length; i++)
             {
-                Consider(players[i]);
+                var go = players[i];
+                if (go != null)
+                {
+                    Consider(go.transform);
+                }
             }
         }
 
-        if (closest != null)
+        // Also consider name matches (Player/PlayerModel plus any inspector overrides)
+        Transform[] allTransforms = FindObjectsOfType<Transform>();
+        if (allTransforms != null)
         {
-            return closest;
-        }
-
-        if (additionalTargetNames != null && additionalTargetNames.Length > 0)
-        {
-            Transform[] allTransforms = FindObjectsOfType<Transform>();
             for (int i = 0; i < allTransforms.Length; i++)
             {
                 Transform t = allTransforms[i];
@@ -495,17 +495,37 @@ public class EnemyChase : MonoBehaviour
                     continue;
                 }
 
-                for (int j = 0; j < additionalTargetNames.Length; j++)
+                if (IsAllowedTargetName(name))
                 {
-                    if (name == additionalTargetNames[j])
-                    {
-                        Consider(t.gameObject);
-                        break;
-                    }
+                    Consider(t);
                 }
             }
         }
 
         return closest;
+    }
+
+    private bool IsAllowedTargetName(string candidateName)
+    {
+        for (int i = 0; i < DefaultTargetNames.Length; i++)
+        {
+            if (candidateName == DefaultTargetNames[i])
+            {
+                return true;
+            }
+        }
+
+        if (additionalTargetNames != null && additionalTargetNames.Length > 0)
+        {
+            for (int i = 0; i < additionalTargetNames.Length; i++)
+            {
+                if (candidateName == additionalTargetNames[i])
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 }

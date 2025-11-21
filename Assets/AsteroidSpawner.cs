@@ -65,7 +65,7 @@ public class AsteroidSpawner : MonoBehaviour
     {
         if (asteroidPrefab == null)
         {
-            Debug.LogWarning($"{nameof(AsteroidSpawner)} on {name} has no asteroid prefab assigned.");
+            
             return;
         }
 

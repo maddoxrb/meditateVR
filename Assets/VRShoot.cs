@@ -410,7 +410,6 @@ public class VRShoot : MonoBehaviour
 
     private void LogHold(string where, OVRInput.Controller controller, string note)
     {
-        Debug.LogError($"[VRShoot] {where}: holding={HandString(controller)} controller={controller} note={note}");
     }
 
     private OVRInput.Controller DetectPressingController()
