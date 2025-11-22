@@ -65,7 +65,7 @@
 [Video](https://drive.google.com/file/d/1gpJb3w7YjE2ujNXxBBe4JinIacngG6k8/view?usp=sharing)
 
 ## Build APK
-[APK](https://drive.google.com/file/d/1ZMffTKipgJCnQBlwru4eV1TmKWMdebvW/view?usp=sharing)
+[APK](https://drive.google.com/file/d/12D_Hb2D_KfcgDKprI958PqbxxrxqMkTL/view?usp=sharing)
 
 
 # Sprint 4
