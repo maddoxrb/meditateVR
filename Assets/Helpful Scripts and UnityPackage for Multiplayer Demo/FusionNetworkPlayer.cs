@@ -16,6 +16,7 @@ public class FusionNetworkPlayer : NetworkBehaviour
     private Transform headRig;
     private Transform leftHandRig;
     private Transform rightHandRig;
+    private Transform cameraRigRoot;
     public Animator leftHandAnimator, rightHandAnimator;
     public InputActionProperty LeftActivateAction, LeftGripAction, RightActivateAction, RightGripAction;
 
@@ -27,6 +28,7 @@ public class FusionNetworkPlayer : NetworkBehaviour
             headRig = GameObject.Find("[BuildingBlock] Camera Rig/TrackingSpace/CenterEyeAnchor").transform;
             leftHandRig = GameObject.Find("[BuildingBlock] Camera Rig/TrackingSpace/LeftHandAnchor/LeftControllerAnchor").transform;
             rightHandRig = GameObject.Find("[BuildingBlock] Camera Rig/TrackingSpace/RightHandAnchor/RightControllerAnchor").transform;
+            cameraRigRoot = GameObject.Find("[BuildingBlock] Camera Rig").transform;
             NeckLocalPosition = Neck.transform.localPosition;
 
             // --- Hide all renderers on head, hands, and neck for the local player ---
@@ -105,6 +107,7 @@ public class FusionNetworkPlayer : NetworkBehaviour
         rig.position = target.position;
         rig.rotation = target.rotation;
 
+        // Update ground contact position based on head position
         if (target == headRig)
         {
             Vector3 GroundContactPostition = target.position;
@@ -114,7 +117,8 @@ public class FusionNetworkPlayer : NetworkBehaviour
             if (HeadRotation.y > 180.0f)
                 HeadRotation.y -= 360.0f;
 
-            GroundContactPostition.y = 0;
+            // Align avatar root with camera rig base position, fallback to world y=0
+            GroundContactPostition.y = cameraRigRoot != null ? cameraRigRoot.position.y : 0;
             GroundContact.transform.position = GroundContactPostition;
             GroundContact.transform.rotation = Quaternion.Euler(HeadRotation);
             
