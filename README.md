@@ -135,7 +135,7 @@ This sprint was oriented towards setting up the general gameplay logic, improvin
 - ✚ Added gun & bullet networking
   
 ## Progress Video
-[Video](https://drive.google.com/file/d/1xzsVCwhVBPrTrb2JKVdJYCSM2jhwh-vU/view?usp=sharing)
+[Video](https://drive.google.com/file/d/18vuMMEsBm8Ri9HWxAe8Sq418ZnwpayyY/view?usp=sharing)
 ## Build APK
 [APK](https://drive.google.com/file/d/1HCQyUzNWgOIXVnyfa7RXT4cpz7g4lycS/view?usp=sharing)
 
