@@ -25,10 +25,32 @@ public class FusionNetworkPlayer : NetworkBehaviour
         if (HasInputAuthority)
         {
             // Map XR rig references
-            headRig = GameObject.Find("[BuildingBlock] Camera Rig/TrackingSpace/CenterEyeAnchor").transform;
-            leftHandRig = GameObject.Find("[BuildingBlock] Camera Rig/TrackingSpace/LeftHandAnchor/LeftControllerAnchor").transform;
-            rightHandRig = GameObject.Find("[BuildingBlock] Camera Rig/TrackingSpace/RightHandAnchor/RightControllerAnchor").transform;
-            cameraRigRoot = GameObject.Find("[BuildingBlock] Camera Rig").transform;
+            var headRigObj = GameObject.Find("[BuildingBlock] Camera Rig/TrackingSpace/CenterEyeAnchor");
+            var leftHandRigObj = GameObject.Find("[BuildingBlock] Camera Rig/TrackingSpace/LeftHandAnchor/LeftControllerAnchor");
+            var rightHandRigObj = GameObject.Find("[BuildingBlock] Camera Rig/TrackingSpace/RightHandAnchor/RightControllerAnchor");
+            var cameraRigRootObj = GameObject.Find("[BuildingBlock] Camera Rig");
+
+            // Null checks with error logging
+            if (headRigObj == null)
+                Debug.LogError("[FusionNetworkPlayer] Could not find CenterEyeAnchor. Avatar head tracking will not work.");
+            else
+                headRig = headRigObj.transform;
+
+            if (leftHandRigObj == null)
+                Debug.LogError("[FusionNetworkPlayer] Could not find LeftControllerAnchor. Left hand tracking will not work.");
+            else
+                leftHandRig = leftHandRigObj.transform;
+
+            if (rightHandRigObj == null)
+                Debug.LogError("[FusionNetworkPlayer] Could not find RightControllerAnchor. Right hand tracking will not work.");
+            else
+                rightHandRig = rightHandRigObj.transform;
+
+            if (cameraRigRootObj == null)
+                Debug.LogError("[FusionNetworkPlayer] Could not find Camera Rig root. Avatar positioning may be incorrect.");
+            else
+                cameraRigRoot = cameraRigRootObj.transform;
+
             NeckLocalPosition = Neck.transform.localPosition;
 
             // --- Hide all renderers on head, hands, and neck for the local player ---
@@ -54,9 +76,13 @@ public class FusionNetworkPlayer : NetworkBehaviour
     {
         if (HasInputAuthority)
         {
-            MapPoseToRig(head, headRig);
-            MapPoseToRig(leftHand, leftHandRig);
-            MapPoseToRig(rightHand, rightHandRig);
+            // Only update tracking if rig references are valid
+            if (headRig != null)
+                MapPoseToRig(head, headRig);
+            if (leftHandRig != null)
+                MapPoseToRig(leftHand, leftHandRig);
+            if (rightHandRig != null)
+                MapPoseToRig(rightHand, rightHandRig);
 
             UpdateHandAnimation(leftHand, 1);
             UpdateHandAnimation(rightHand, 2);
@@ -104,6 +130,9 @@ public class FusionNetworkPlayer : NetworkBehaviour
 
     private void MapPoseToRig(Transform rig, Transform target)
     {
+        if (rig == null || target == null)
+            return;
+
         rig.position = target.position;
         rig.rotation = target.rotation;
 
