@@ -1,0 +1,97 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &2323014079155441320
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2943036114394138276}
+  - component: {fileID: 533990260645227739}
+  m_Layer: 0
+  m_Name: BreathworkGuide
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &2943036114394138276
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2323014079155441320}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 6.765098, y: 2.99, z: -2.4}
+  m_LocalScale: {x: 8, y: 8, z: 8}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &533990260645227739
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2323014079155441320}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e18e72a32fa284ca9842f83e1fa3bc69, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  placeInFrontOfCameraOnStart: 1
+  distanceFromCamera: 3
+  cameraRelativeOffset: {x: 0, y: -0.05, z: 0}
+  faceMainCamera: 0
+  inhaleDuration: 4
+  inhaleHoldDuration: 1
+  exhaleDuration: 6
+  exhaleHoldDuration: 1
+  ease:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 1
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  minRadius: 0.08
+  maxRadius: 0.2
+  ringSegments: 128
+  ringWidth: 0.008
+  inhaleColor: {r: 0.35, g: 0.82, b: 1, a: 1}
+  exhaleColor: {r: 0.3, g: 0.45, b: 1, a: 1}
+  holdColor: {r: 0.55, g: 0.75, b: 1, a: 1}
+  showInstructionText: 1
+  inhaleText: Breathe In
+  exhaleText: Breathe Out
+  holdText: Hold
+  instructionColor: {r: 1, g: 1, b: 1, a: 1}
+  instructionHeight: 0.28
+  instructionFontSize: 64
+  playAudioPrompts: 0
+  promptAudioSource: {fileID: 0}
+  inhalePromptClip: {fileID: 0}
+  exhalePromptClip: {fileID: 0}
+  verboseLogging: 0
